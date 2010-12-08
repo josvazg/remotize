@@ -1,0 +1,33 @@
+INTRODUCTION
+____________
+
+Goloader are a set of packages that allow programmers in Google's go language to load objects dynamicaly.
+
+As of this moment (December 2010) Go language does NOT allow for shared libraries nor dynamic loading due to desing reasons. Basically to ensure that DLL Hell and Shared Object Linking problems and complications don't make go compilers/linkers slow an complicated and also go programs don't get slow to be loaded and also bloated with all the linking extra information.
+
+On the other hand, it is usually useful to be able to use objects like plugins or remote objects without having to write the implementation at the same time or link it within the same executable as the main program.
+
+This library will allow to load remote and out of process objects to be used just as if they where local to the loading program. It will also allow to load some objects "by name" locally if they are statically linked in the program.
+
+
+HOW IT WORKS
+____________
+
+The entry point for goloader will be the Loader interface:
+
+type Loader interface {
+	load(url string) (obj interface{}, err os.Error)
+} 
+
+The url will include information about the loaded object. For Instance:
+
+"local:somelocalPackage.SomeLocalPreRegisteredObject"
+The loader will look for a pre-registered object with name 'somelocalPackage.SomeLocalPreRegisteredObject' and if it finds it it will return it directly. Otherwise it will fail and return an error.
+
+"local:somelocalPackage.SomeLocalPreRegisteredObject:package.Interface"
+The loader will do the same as before, but if it does NOT find the preregistered object now it will look for the package.Interface. If not found it will fail. Otherwise the registered object should be an stub implementing the full 'package.Interface' interface remotely, talking to the skeleton plugged to the implementation called 'somelocalPackage.SomeLocalPreRegisteredObject'. Once the stub is loaded the process will fork a skeleton loader to bring up the implementation 'somelocalPackage.SomeLocalPreRegisteredObject'. The forked process will serve the 'package.Interface' methods through its standard Input / Output but to the main process they will seem just as local method invocations (althould they might have special error handling)
+
+"rii:host:port:path:somePkg.SomeObject:package.Interface"
+The loader will look for a rii (Remote Invocation Interface) registered object. The Registered object must be an Stub. The skeleton plugged to the implementation should be listening already in the host / port provided or it should be launchable on that tcp coordinates. RII communications are done over a TCP socket.
+
+To sum up, loader will transparently load both statically linked objects, AND out of process (local or remote) interface implementations.

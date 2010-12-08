@@ -31,3 +31,15 @@ The loader will do the same as before, but if it does NOT find the preregistered
 The loader will look for a rii (Remote Invocation Interface) registered object. The Registered object must be an Stub. The skeleton plugged to the implementation should be listening already in the host / port provided or it should be launchable on that tcp coordinates. RII communications are done over a TCP socket.
 
 To sum up, loader will transparently load both statically linked objects, AND out of process (local or remote) interface implementations.
+
+Loadable implementations of interfaces will be restricted methods whose arguments and return values are objects that can be transported by the gob package.
+
+ARCHITECTURE
+____________
+
+Goloader will consist of a bunch of go packages:
+- Package "container/mapper" provides a Mapper that can be thread safe, typed and preserving insertion order. It will be used a thread safe central registry for loadable objects and stubs.
+- Package "rii" provides Remote Interface Invocation.
+- Package "load" will implements the goloader by using the rii, container/mapper packages as well as the gob package and some other basic core go packages.
+
+

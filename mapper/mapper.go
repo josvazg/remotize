@@ -19,7 +19,7 @@ type Mapper interface {
 	Get(key string) (value interface{}, ok bool)
 	Remove(key string) (value interface{}, ok bool)
 	Keys() []string 
-	Clear() bool
+	Clear()
 }
 
 type msg struct { 
@@ -39,7 +39,7 @@ type themap struct {
 	order	map[string]int
 }
 
-func NewMapper(threadSafe bool, linked bool, typed interface{}) (*themap) { 
+func NewMapper(threadSafe bool, linked bool, typed interface{}) Mapper { 
         m:=new(themap); 
         m.values=make(map[string]interface{}) 
 	if(threadSafe) {

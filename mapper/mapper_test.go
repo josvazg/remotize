@@ -22,12 +22,12 @@ func TestThreadSafeMap(t *testing.T) {
 	m:=NewMapper(true,false,nil)
 	quitChan:=make(chan int)
 	fmt.Println("Test ",m)
-	go func(m *themap, ch chan int) {
+	go func(m Mapper, ch chan int) {
 		m.Put("1",1)		
 		fmt.Println("Test One ",m)
 		ch<-1
 	}(m,quitChan)
-	go func(m *themap, ch chan int) {
+	go func(m Mapper, ch chan int) {
 		m.Put("1",2)
 		fmt.Println("Test Two ",m)
 		ch<-1

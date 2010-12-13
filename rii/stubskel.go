@@ -1,6 +1,6 @@
 /*
 
-
+	stubskel.go implements the common stub and skel core functions for Remote Interface Invocations
 
 */
 package rii
@@ -14,13 +14,28 @@ import (
 
 var stubs mapper.Mapper
 
-type Stubber interface {
-	getInterfaceType() *reflect.InterfaceType
+type skeletor interface {
+	execute(*invocation) *response
+}
+
+type response struct {
+	id int
+	results []interface{}
+	error os.Error
+}
+
+type invocation struct {
+	id int
+	funcNum int
+	args []interface{}
+	rch chan *response
 }
 
 type commonStub struct {
 	iface *reflect.InterfaceType
 	url string
+	alive bool
+	ch chan *invocation
 	enc *gob.Encoder
 	dec *gob.Decoder
 }
@@ -32,10 +47,22 @@ type commonSkel struct {
 	dec *gob.Decoder
 }
 
-type riiMsg struct {
-	funcNum int
-	data []interface{}
-	error os.Error
+type StubSkeletor interface {
+	alive() bool
+	enc() *gob.Encoder
+	dec() *gob.Decoder
+	invocationFor(int) *invocation
+}
+
+type Stubber interface {
+	StubSkeletor
+	ch() chan *invocation
+}
+
+type Skeletor interface {
+	StubSkeletor
+	execute(*invocation) *response
+	rch() chan *response
 }
 
 func init() {
@@ -43,45 +70,68 @@ func init() {
 }
 
 func (s *commonStub) invoke(funcNum int, args ... interface{}) (results *[]interface{}, err os.Error) {
-	var response riiMsg
-	invocation:=riiMsg{funcNum,args,nil}
-	s.enc.Encode(invocation)
-	error:=s.dec.Decode(response)
-	if(error!=nil) {
-		return nil,error
+	rch:=make(chan *response)
+	s.ch<-&invocation{0,funcNum,args,rch}
+	rsp:=<-rch
+	if(rsp.error!=nil) {
+		return nil,rsp.error
 	}
-	if(response.error!=nil) {
-		return nil,response.error
-	}
-	return &response.data,nil
+	return &rsp.results,nil
 }
 
-func (s *commonSkel) callsLoop() {
-	for ;s.alive; {
-		var invocation,response *riiMsg
-		err:=s.dec.Decode(invocation);
+func invocationsLoop(s Stubber) {
+	id:=0
+	for ;s.alive(); {
+		invok:=<-s.ch()
+		id++
+		invok.id=id
+		err:=s.enc().Encode(invok)
 		if(err!=nil) {
-			response=&riiMsg{-1,nil,err}			
-		} else {
-			response=s.execute(invocation)
+			// TODO local error 
 		}
-		s.enc.Encode(response)		
 	}
 }
 
-func (s *commonSkel) execute(invocation *riiMsg) *riiMsg {
-	// nothing in the common implementation
-	return nil
+func responseLoop(s Stubber) {
+	for ;s.alive(); {
+		var rsp *response
+		error:=s.dec().Decode(rsp)
+		invok:=s.invocationFor(rsp.id)
+		if(error!=nil) {
+			invok.rch<-&response{invok.id,nil,error}
+		} else {
+			invok.rch<-rsp
+		}
+	}
 }
 
+func callsLoop(s Skeletor) {
+	id:=0
+	for ;s.alive(); {
+		var invok *invocation
+		err:=s.dec().Decode(invok)
+		id=invok.id
+		var rsp *response
+		if(err!=nil) {
+			rsp=&response{id,nil,err}
+			s.rch()<-rsp
+		} else {
+			go func(*invocation) {
+				rsp:=s.execute(invok)
+				s.rch()<-rsp
+			}(invok)
+		}
+	}
+}
 
-
-
-
-
-
-
-
-
+func replyLoop(s Skeletor) {
+	for ;s.alive(); {
+		rsp:=<-s.rch()
+		err:=s.enc().Encode(rsp)
+		if(err!=nil) {
+			s.enc().Encode(&response{rsp.id,nil,err})
+		}
+	}
+}
 
 

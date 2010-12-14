@@ -1,3 +1,9 @@
+/*
+
+	mapper.go	implements a (optionally) thread-safe
+	, insertion-ordered and types Map
+
+*/
 package mapper
 
 import (

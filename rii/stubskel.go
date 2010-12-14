@@ -1,6 +1,7 @@
 /*
 
-	stubskel.go implements the common stub and skel core functions for Remote Interface Invocations
+	stubskel.go 	implements the common stub and skel core functions for 
+	Remote Interface Invocations
 
 */
 package rii
@@ -9,6 +10,7 @@ import (
 	"container/mapper"
 	"reflect"
 	"os"
+	"io"
 	"gob"
 )
 
@@ -31,20 +33,23 @@ type invocation struct {
 	rch chan *response
 }
 
-type commonStub struct {
-	iface *reflect.InterfaceType
-	url string
-	alive bool
-	ch chan *invocation
+type commonStubSkel struct {
 	enc *gob.Encoder
 	dec *gob.Decoder
 }
 
+type commonStub struct {
+	commonStubSkel
+	iface *reflect.InterfaceType
+	url string
+	alive bool
+	ch chan *invocation
+}
+
 type commonSkel struct {
+	commonStubSkel
 	iface *reflect.InterfaceType
 	alive bool
-	enc *gob.Encoder
-	dec *gob.Decoder
 }
 
 type StubSkeletor interface {
@@ -69,7 +74,14 @@ func init() {
 	stubs=mapper.NewMapper(true,true,new(Stubber))
 }
 
-func (s *commonStub) invoke(funcNum int, args ... interface{}) (results *[]interface{}, err os.Error) {
+func newStubBase(url string, iface *reflect.InterfaceType, 
+		rw io.ReadWriter) (*commonStub) {
+	return &commonStub{commonStubSkel{gob.NewEncoder(rw),
+		gob.NewDecoder(rw)},iface,url,false,make(chan *invocation)}
+}
+
+func (s *commonStub) invoke(funcNum int, 
+		args ... interface{}) (results *[]interface{}, err os.Error) {
 	rch:=make(chan *response)
 	s.ch<-&invocation{0,funcNum,args,rch}
 	rsp:=<-rch

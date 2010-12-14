@@ -44,6 +44,7 @@ type commonStub struct {
 	url string
 	alive bool
 	ch chan *invocation
+	id2invok map[int] *invocation 
 }
 
 type commonSkel struct {
@@ -56,6 +57,7 @@ type StubSkeletor interface {
 	alive() bool
 	enc() *gob.Encoder
 	dec() *gob.Decoder
+	setInvocation(*invocation)
 	invocationFor(int) *invocation
 }
 
@@ -77,7 +79,8 @@ func init() {
 func newStubBase(url string, iface *reflect.InterfaceType, 
 		rw io.ReadWriter) (*commonStub) {
 	return &commonStub{commonStubSkel{gob.NewEncoder(rw),
-		gob.NewDecoder(rw)},iface,url,false,make(chan *invocation)}
+		gob.NewDecoder(rw)},iface,url,false,make(chan *invocation),
+		make(map[int] *invocation)}
 }
 
 func (s *commonStub) invoke(funcNum int, 
@@ -91,15 +94,24 @@ func (s *commonStub) invoke(funcNum int,
 	return &rsp.results,nil
 }
 
+func (s *commonStub) setInvocation(invok *invocation) {
+	s.id2invok[invok.id]=invok
+}
+
+func (s *commonStub) invocationFor(id int) *invocation {
+	return s.id2invok[id]
+}
+
 func invocationsLoop(s Stubber) {
 	id:=0
 	for ;s.alive(); {
 		invok:=<-s.ch()
 		id++
 		invok.id=id
+		s.setInvocation(invok)
 		err:=s.enc().Encode(invok)
 		if(err!=nil) {
-			// TODO local error 
+			invok.rch<-&response{id,nil,err} 
 		}
 	}
 }
@@ -145,5 +157,4 @@ func replyLoop(s Skeletor) {
 		}
 	}
 }
-
 

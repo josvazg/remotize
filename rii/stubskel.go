@@ -12,12 +12,25 @@ import (
 	"os"
 	"io"
 	"gob"
+	"fmt"
 )
 
 var stubs mapper.Mapper
 
 type skeletor interface {
-	execute(*invocation) *response
+	commonSkel() *commonSkel
+	execute(funcNum int,args []interface{}) []interface{}
+}
+
+type call struct {
+	id int
+	funcNum int
+	args []interface{}
+}
+
+type invocation struct {
+	call
+	rch chan *response
 }
 
 type response struct {
@@ -26,68 +39,45 @@ type response struct {
 	error os.Error
 }
 
-type invocation struct {
-	id int
-	funcNum int
-	args []interface{}
-	rch chan *response
-}
-
-type commonStubSkel struct {
+type commonStub struct {
 	enc *gob.Encoder
 	dec *gob.Decoder
-}
-
-type commonStub struct {
-	commonStubSkel
+	alive bool
 	iface *reflect.InterfaceType
 	url string
-	alive bool
 	ch chan *invocation
 	id2invok map[int] *invocation 
 }
 
+func newStubBase(url string, rw io.ReadWriter) (*commonStub) {
+	return &commonStub{gob.NewEncoder(rw),gob.NewDecoder(rw),true,
+		nil,url,make(chan *invocation),make(map[int]*invocation)}
+}
+
 type commonSkel struct {
-	commonStubSkel
-	iface *reflect.InterfaceType
+	enc *gob.Encoder
+	dec *gob.Decoder
 	alive bool
+	rch chan *response
 }
 
-type StubSkeletor interface {
-	alive() bool
-	enc() *gob.Encoder
-	dec() *gob.Decoder
-	setInvocation(*invocation)
-	invocationFor(int) *invocation
-}
-
-type Stubber interface {
-	StubSkeletor
-	ch() chan *invocation
-}
-
-type Skeletor interface {
-	StubSkeletor
-	execute(*invocation) *response
-	rch() chan *response
+func newSkelBase(rw io.ReadWriter) (*commonSkel) {
+	return &commonSkel{gob.NewEncoder(rw),gob.NewDecoder(rw),true,
+		make(chan *response)}
 }
 
 func init() {
-	stubs=mapper.NewMapper(true,true,new(Stubber))
-}
-
-func newStubBase(url string, iface *reflect.InterfaceType, 
-		rw io.ReadWriter) (*commonStub) {
-	return &commonStub{commonStubSkel{gob.NewEncoder(rw),
-		gob.NewDecoder(rw)},iface,url,false,make(chan *invocation),
-		make(map[int] *invocation)}
+	stubs=mapper.NewMapper(true,true,nil)
 }
 
 func (s *commonStub) invoke(funcNum int, 
 		args ... interface{}) (results *[]interface{}, err os.Error) {
 	rch:=make(chan *response)
-	s.ch<-&invocation{0,funcNum,args,rch}
+	fmt.Println("Invoking ",funcNum,args,"...")
+	s.ch<-&invocation{call{0,funcNum,args},rch}
+	fmt.Println("waiting response...")
 	rsp:=<-rch
+	fmt.Println("done rsp:",rsp)
 	if(rsp.error!=nil) {
 		return nil,rsp.error
 	}
@@ -102,24 +92,42 @@ func (s *commonStub) invocationFor(id int) *invocation {
 	return s.id2invok[id]
 }
 
-func invocationsLoop(s Stubber) {
-	id:=0
-	for ;s.alive(); {
-		invok:=<-s.ch()
-		id++
-		invok.id=id
-		s.setInvocation(invok)
-		err:=s.enc().Encode(invok)
-		if(err!=nil) {
-			invok.rch<-&response{id,nil,err} 
-		}
-	}
+func (s *commonStub) startStub() {
+	go responseLoop(s)
+	go invocationsLoop(s)
+} 
+
+func (s *commonStub) stopStub() {
+	s.alive=false
 }
 
-func responseLoop(s Stubber) {
-	for ;s.alive(); {
+func invocationsLoop(s *commonStub) {
+	fmt.Println("invocationLoop Started")
+	id:=0
+	for ;s.alive; {
+		invok:=<-s.ch
+		fmt.Println("Got invocation:",invok)
+		id++
+		invok.id=id
+		fmt.Println("Update invocation id:",invok)
+		s.setInvocation(invok)
+		fmt.Println("Encode call:",invok.call)
+		err:=s.enc.Encode(invok.call)
+		if(err!=nil) {
+			fmt.Println("Encode err:",err)
+			invok.rch<-&response{id,nil,err} 
+		} else {
+			fmt.Println("Done call#",invok.id,":",invok.call)
+		}
+	}
+	fmt.Println("invocationLoop Ended")
+}
+
+func responseLoop(s *commonStub) {
+	fmt.Println("responseLoop Started")
+	for ;s.alive; {
 		var rsp *response
-		error:=s.dec().Decode(rsp)
+		error:=s.dec.Decode(rsp)
 		invok:=s.invocationFor(rsp.id)
 		if(error!=nil) {
 			invok.rch<-&response{invok.id,nil,error}
@@ -127,34 +135,60 @@ func responseLoop(s Stubber) {
 			invok.rch<-rsp
 		}
 	}
+	fmt.Println("responseLoop Ended")
 }
 
-func callsLoop(s Skeletor) {
+func (s *commonSkel) commonSkel() *commonSkel {
+	return s
+}
+
+func startSkel(sk skeletor) {
+	go callsLoop(sk)
+	go replyLoop(sk.commonSkel())
+} 
+
+func stopSkel(sk skeletor) {
+	sk.commonSkel().alive=false
+}
+
+func (s *commonSkel) newResponseTo(rcall *call) (*response) {
+	return &response{rcall.id,nil,nil}
+}
+
+func callsLoop(sk skeletor) {
+	fmt.Println("callsLoop Started")
 	id:=0
-	for ;s.alive(); {
-		var invok *invocation
-		err:=s.dec().Decode(invok)
-		id=invok.id
+	s:=sk.commonSkel()
+	for ;s.alive; {
+		var rcall call
 		var rsp *response
-		if(err!=nil) {
-			rsp=&response{id,nil,err}
-			s.rch()<-rsp
+		err:=s.dec.Decode(rcall)
+		if(err==nil) {
+			id=rcall.id
+			fmt.Println("got call id ",id)
+			go func(rcall *call) {
+				rsp:=s.newResponseTo(rcall)
+				rsp.results=s.execute(rcall.funcNum,rcall.args)
+				s.rch<-rsp
+			}(&rcall)
 		} else {
-			go func(*invocation) {
-				rsp:=s.execute(invok)
-				s.rch()<-rsp
-			}(invok)
+			id++
+			rsp=&response{id,nil,err}
+			s.rch<-rsp
 		}
 	}
+	fmt.Println("callsLoop Ended")
 }
 
-func replyLoop(s Skeletor) {
-	for ;s.alive(); {
-		rsp:=<-s.rch()
-		err:=s.enc().Encode(rsp)
+func replyLoop(s *commonSkel) {
+	fmt.Println("replyLoop Started")
+	for ;s.alive; {
+		rsp:=<-s.rch
+		err:=s.enc.Encode(rsp)
 		if(err!=nil) {
-			s.enc().Encode(&response{rsp.id,nil,err})
+			s.enc.Encode(&response{rsp.id,nil,err})
 		}
 	}
+	fmt.Println("replyLoop Ended")
 }
 

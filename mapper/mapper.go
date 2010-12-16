@@ -1,9 +1,11 @@
-/*
+// Copyright 2010 Jose Luis Vázquez González josvazg@gmail.com
+// Use of this source code is governed by a BSD-style
 
-	mapper.go	implements a (optionally) thread-safe
-	, insertion-ordered and types Map
+// The mapper package implements a extended map that can be thread safe (or not)
+// , insertion ordered (or not) and typed (or not)
 
-*/
+// References:
+//   No references yet (http://www.google.com)
 package mapper
 
 import (
@@ -20,6 +22,10 @@ const (
         clear 
 ) 
 
+// The Mapper interface is the one provided for extended Maps created by this 
+// package.
+//
+// Other implementations might use this interface as well
 type Mapper interface {
 	Put(key string, value interface{})
 	Get(key string) (value interface{}, ok bool)
@@ -37,6 +43,7 @@ type msg struct {
         reply	chan msg 
 } 
 
+// hidden mapper implementation
 type themap struct { 
         values	map[string]interface{} 
 	typed	reflect.Type
@@ -45,6 +52,13 @@ type themap struct {
 	order	map[string]int
 }
 
+// NewMapper creates a preconfigured Mapper implementation:
+//
+// "threadSafe" and "linked" control whether the Mapper is thread safe and insertion
+// -ordered or not respectively
+//
+// "typed" is a type or a sample value (or pointer to value) of the type to force
+// the map to be. Or it can be nil if the Mapper is NOT typed
 func NewMapper(threadSafe bool, linked bool, typed interface{}) Mapper { 
         m:=new(themap); 
         m.values=make(map[string]interface{}) 

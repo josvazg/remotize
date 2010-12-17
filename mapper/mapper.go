@@ -3,9 +3,6 @@
 
 // The mapper package implements a extended map that can be thread safe (or not)
 // , insertion ordered (or not) and typed (or not)
-
-// References:
-//   No references yet (http://www.google.com)
 package mapper
 
 import (
@@ -14,12 +11,12 @@ import (
 )
 
 const ( 
-        put = iota 
-        get 
-        remove 
-        str 
+	put = iota 
+	get 
+	remove 
+	str 
 	keys
-        clear 
+	clear 
 ) 
 
 // The Mapper interface is the one provided for extended Maps created by this 
@@ -35,12 +32,12 @@ type Mapper interface {
 }
 
 type msg struct { 
-        op	int 
+	op	int 
 	ok	bool
-        str	string 
-        value	interface{}
+	str	string 
+	value	interface{}
 	keys	[]string
-        reply	chan msg 
+	reply	chan msg 
 } 
 
 // hidden mapper implementation

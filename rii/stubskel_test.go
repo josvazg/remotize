@@ -40,6 +40,12 @@ func TestStubSkel(t *testing.T) {
 	inBoundIn,inBoundOut:=io.Pipe()
 	localSocket:=newMemSocket(inBoundIn, outBoundOut)
 	remoteSocket:=newMemSocket(outBoundIn, inBoundOut)
+	go func() {
+		bytes:=make([]byte,10)	
+		n,_:=remoteSocket.Read(bytes)
+		fmt.Println("L->R Recv",n,"bytes:",string(bytes))	
+	}()
+	localSocket.Write([]byte("Hola"))
 	sb:=newStubBase("local:",localSocket)
 	sk:=newSkelBase(remoteSocket)
 	sb.startStub()

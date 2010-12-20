@@ -42,8 +42,8 @@ type response struct {
 }
 
 type commonStub struct {
-	enc      *gob.Encoder
-	dec      *gob.Decoder
+	e      *gob.Encoder
+	d      *gob.Decoder
 	alive    bool
 	iface    *reflect.InterfaceType
 	url      string
@@ -57,8 +57,8 @@ func newStubBase(url string, rw io.ReadWriter) *commonStub {
 }
 
 type commonSkel struct {
-	enc   *gob.Encoder
-	dec   *gob.Decoder
+	e   *gob.Encoder
+	d   *gob.Decoder
 	alive bool
 	rch   chan *response
 }
@@ -103,17 +103,17 @@ func (s *commonStub) stopStub() {
 }
 
 func invocationsLoop(s *commonStub) {
-	fmt.Println("invocationLoop Started")
+	fmt.Println("stub: invocationLoop Started")
 	id := 0
 	for s.alive {
 		invok := <-s.ch
-		fmt.Println("Got invocation:", invok)
+		fmt.Println("stub: Got invocation:", invok)
 		id++
 		invok.id = id
-		fmt.Println("Update invocation id:", invok)
+		fmt.Println("stub: Update invocation id:", invok)
 		s.setInvocation(invok)
-		fmt.Println("Encode call:", invok.call)
-		err := s.enc.Encode(invok.call)
+		fmt.Println("stub: Encode call:", invok.call)
+		err := s.e.Encode(invok.call)
 		if err != nil {
 			fmt.Println("Encode err:", err)
 			invok.rch <- &response{id, nil, err}
@@ -121,14 +121,14 @@ func invocationsLoop(s *commonStub) {
 			fmt.Println("Done call#", invok.id, ":", invok.call)
 		}
 	}
-	fmt.Println("invocationLoop Ended")
+	fmt.Println("stub: invocationLoop Ended")
 }
 
 func responseLoop(s *commonStub) {
-	fmt.Println("responseLoop Started")
+	fmt.Println("stub: responseLoop Started")
 	for s.alive {
 		var rsp *response
-		error := s.dec.Decode(rsp)
+		error := s.d.Decode(&rsp)
 		invok := s.invocationFor(rsp.id)
 		if error != nil {
 			invok.rch <- &response{invok.id, nil, error}
@@ -136,7 +136,7 @@ func responseLoop(s *commonStub) {
 			invok.rch <- rsp
 		}
 	}
-	fmt.Println("responseLoop Ended")
+	fmt.Println("stub: responseLoop Ended")
 }
 
 func (s *commonSkel) commonSkel() *commonSkel {
@@ -157,13 +157,13 @@ func (s *commonSkel) newResponseTo(rcall *call) *response {
 }
 
 func callsLoop(sk skeletor) {
-	fmt.Println("callsLoop Started")
+	fmt.Println("skel: callsLoop Started")
 	id := 0
 	s := sk.commonSkel()
 	for s.alive {
 		var rcall call
 		var rsp *response
-		err := s.dec.Decode(rcall)
+		err := s.d.Decode(&rcall)
 		if err == nil {
 			id = rcall.id
 			fmt.Println("got call id ", id)
@@ -178,17 +178,17 @@ func callsLoop(sk skeletor) {
 			s.rch <- rsp
 		}
 	}
-	fmt.Println("callsLoop Ended")
+	fmt.Println("skel: callsLoop Ended")
 }
 
 func replyLoop(s *commonSkel) {
-	fmt.Println("replyLoop Started")
+	fmt.Println("skel: replyLoop Started")
 	for s.alive {
 		rsp := <-s.rch
-		err := s.enc.Encode(rsp)
+		err := s.e.Encode(rsp)
 		if err != nil {
-			s.enc.Encode(&response{rsp.id, nil, err})
+			s.e.Encode(&response{rsp.id, nil, err})
 		}
 	}
-	fmt.Println("replyLoop Ended")
+	fmt.Println("skel: replyLoop Ended")
 }

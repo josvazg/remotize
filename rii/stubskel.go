@@ -17,6 +17,10 @@ import (
 	"fmt"
 )
 
+const (
+	quit=-1
+)
+
 var stubs mapper.Mapper
 
 type skeletor interface {
@@ -130,7 +134,10 @@ func responseLoop(s *commonStub) {
 		var rsp *response
 		error := s.d.Decode(&rsp)
 		invok := s.invocationFor(rsp.id)
-		if error != nil {
+		if(rsp.id==quit && s.alive) {
+			fmt.Println("Remote Skel stopped!")
+			s.alive=false
+		} else if error != nil {
 			invok.rch <- &response{invok.id, nil, error}
 		} else {
 			invok.rch <- rsp
@@ -149,7 +156,9 @@ func startSkel(sk skeletor) {
 }
 
 func stopSkel(sk skeletor) {
-	sk.commonSkel().alive = false
+	cs:=sk.commonSkel()
+	cs.alive = false
+	cs.rch<-&response{quit,nil,nil}
 }
 
 func (s *commonSkel) newResponseTo(rcall *call) *response {

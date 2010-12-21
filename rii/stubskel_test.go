@@ -10,15 +10,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"gob"
 )
 
 type memsocket struct {
-	r io.Reader
-	w io.Writer
+	r io.ReadCloser
+	w io.WriteCloser
 }
 
-func newMemSocket(r io.Reader, w io.Writer) (*memsocket) {
+func newMemSocket(r io.ReadCloser, w io.WriteCloser) (*memsocket) {
 	return &memsocket{r,w}
 }
 
@@ -30,24 +29,28 @@ func (ms *memsocket) Write(p []byte) (n int, err os.Error) {
 	return ms.w.Write(p)
 }
 
-func (s *commonSkel) execute(funcNum int,args []interface{}) []interface{} {
+func (ms *memsocket) Close() os.Error {
+	ms.w.Close()
+	ms.r.Close()
+	return nil
+}
+
+type someskeletor int;
+
+func (s *someskeletor) execute(funcNum int,args []interface{}) []interface{} {
 	if(funcNum==1) {
 		arg1:=(args[0]).(int)
 		arg2:=(args[1]).(int)
 		var results []interface{}=make([]interface{},1)
-		results[0]=add(arg1,arg2)
+		results[0]=s.add(arg1,arg2)
 		return results
 	}		
 	return nil
 }
 
-func add(a int, b int) int {
-	return a+b;
-}
-
-type sometype struct {
-	n int
-	name string
+func (s *someskeletor) add(a int, b int) int {
+	*s=someskeletor(a+b);
+	return int(*s);
 }
 
 func TestStubSkel(t *testing.T) {
@@ -55,28 +58,17 @@ func TestStubSkel(t *testing.T) {
 	r2,w2:=io.Pipe()
 	localSocket:=newMemSocket(r1, w2)
 	remoteSocket:=newMemSocket(r2, w1)
-	go func() {
-		stw:=sometype{1,"hola"}
-		e:=gob.NewEncoder(localSocket)
-		e.Encode(stw)
-	}()
-	var str sometype
-	d:=gob.NewDecoder(remoteSocket)
-	d.Decode(&str)
-	fmt.Println("Recv:",str)	
-
-	sb:=newStubBase("local:",localSocket)
-	sk:=newSkelBase(remoteSocket)
-	sb.startStub()
-	startSkel(sk)
+	st:=newStub("local:",localSocket)
+	var somes someskeletor
+	sk:=newSkel(remoteSocket,&somes)
 	fn:=1
 	arg1:=2
-	arg2:=-3
+	arg2:=7
 	fmt.Println("invoking function#",fn," with args:",arg1,arg2)
-	res,ok:=sb.invoke(fn,arg1,arg2)
-	fmt.Println("res:",res," ok:",ok)
-	sb.stopStub()
-	stopSkel(sk)
+	res,err:=st.invoke(fn,arg1,arg2)
+	fmt.Println("TEST RESULT:(",arg1,")+(",arg2,")=",(*res)[0]," err:",err)
+	st.close()
+	sk.close()
 }
 
 

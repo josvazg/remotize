@@ -10,15 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"gob"
+	"time"
 )
 
 type memsocket struct {
-	r io.Reader
-	w io.Writer
+	r io.ReadCloser
+	w io.WriteCloser
 }
 
-func newMemSocket(r io.Reader, w io.Writer) (*memsocket) {
+func newMemSocket(r io.ReadCloser, w io.WriteCloser) (*memsocket) {
 	return &memsocket{r,w}
 }
 
@@ -30,111 +30,104 @@ func (ms *memsocket) Write(p []byte) (n int, err os.Error) {
 	return ms.w.Write(p)
 }
 
-func (s *commonSkel) execute(funcNum int,args []interface{}) []interface{} {
-	var results []interface{}=make([]interface{},1)
-	results[0]=0
-	return results
+func (ms *memsocket) Close() os.Error {
+	ms.w.Close()
+	ms.r.Close()
+	return nil
 }
 
-type rwbuffer struct {
-	buf []byte
-	r,w int 
-	written chan int
-	reading chan int
+type someskeletor int;
+
+func (s *someskeletor) execute(funcNum int,args []interface{}) []interface{} {
+	switch {
+	case funcNum==1:
+		arg1:=(args[0]).(int)
+		arg2:=(args[1]).(int)
+		var results []interface{}=make([]interface{},1)
+		results[0]=s.add(arg1,arg2)
+		return results
+	case funcNum==2:
+		arg1:=(args[0]).(int)
+		arg2:=(args[1]).(int)
+		var results []interface{}=make([]interface{},1)
+		results[0]=s.addnsleep(arg1,arg2)
+		return results		
+	}		
+	return nil
 }
 
-func (rw *rwbuffer) Read(p []byte) (n int, err os.Error) {
-	fmt.Println("rw.r=",rw.r," rw.w=",rw.w)	
-	fmt.Println("reading into p=",p)	
-	if(rw.r==rw.w) {
-		fmt.Println("Waiting write...")
-		<-rw.written
-		fmt.Println("Writen...")
-	}
-	ln:=rw.w-rw.r
-	fmt.Println("ln=",ln)
-	if(ln==0) {
-		fmt.Println("NO READ")
-		return 0,nil
-	}
-	if(ln>len(p)) {
-		ln=len(p)
-		fmt.Println("*ln=",ln)
-	}
-	s:=rw.r
-	rw.r+=ln
-	for i:=0;i<ln;i++ {
-		p[i]=rw.buf[s+i]
-	}
-	fmt.Println("read p=",p)
-	return ln,nil
+func (s *someskeletor) add(a int, b int) int {
+	*s=someskeletor(a+b);
+	return int(*s);
 }
 
-func (rw *rwbuffer) Write(p []byte) (n int, err os.Error) {
-	fmt.Println("writting p=",p)
-	if(rw.r==rw.w) {
-		rw.buf=make([]byte,len(p))
-		copy(rw.buf,p)
-		rw.r=0
-		rw.w=len(rw.buf)
-	} else {
-		rw.buf=append(rw.buf,p...)
-		rw.w+=len(rw.buf)
-        }
-	fmt.Println("in buf=",rw.buf)
-	_,reading:=<-rw.reading
-	if(reading) {
-		rw.written<-1
-	}
-	return len(p),nil
-}
-
-func newRW() (*rwbuffer) {
-	return &rwbuffer{nil,0,0,make(chan int),make(chan int)}
-}
-
-type sometype struct {
-	n int
-	name string
+func (s *someskeletor) addnsleep(a int, b int) int {
+	*s=someskeletor(a+b);
+	r:=int(*s)
+	sleep:=int64(r)*1e7
+	fmt.Printf("Sleep=%vms\n",(sleep/1e6))
+	time.Sleep(sleep)
+	return r;
 }
 
 func TestStubSkel(t *testing.T) {
-	/*r1,w1:=io.Pipe()
+	r1,w1:=io.Pipe()
 	r2,w2:=io.Pipe()
 	localSocket:=newMemSocket(r1, w2)
-	remoteSocket:=newMemSocket(r2, w1)*/
-	quit:=make(chan int)
-	rw:=newRW()
-	go func() {
-		/*bytes:=make([]byte,10)	
-		n,_:=remoteSocket.Read(bytes)
-		fmt.Println("L->R Recv",n,"bytes:",string(bytes))*/
-		d:=gob.NewDecoder(rw)
-		str:=sometype{0,""}
-		d.Decode(str)
-		/*buf:=make([]byte,100)
-		n,_:=rw.Read(buf)
-		fmt.Println("Recv:",buf[:n])*/
-		<-quit
-	}()
-	//localSocket.Write([]byte("Hola"))
-	e:=gob.NewEncoder(rw)
-	stw:=sometype{1,"hola"}
-	e.Encode(stw)
-	<-quit
-	//fmt.Println("rw.buf",rw.buf)
-	/*sb:=newStubBase("local:",localSocket)
-	sk:=newSkelBase(remoteSocket)
-	sb.startStub()
-	startSkel(sk)
+	remoteSocket:=newMemSocket(r2, w1)
+	st:=newStub("local:",localSocket)
+	var somes someskeletor
+	sk:=newSkel(remoteSocket,&somes)
 	fn:=1
 	arg1:=2
-	arg2:=-3
+	arg2:=7
 	fmt.Println("invoking function#",fn," with args:",arg1,arg2)
-	res,ok:=sb.invoke(fn,arg1,arg2)
-	fmt.Println("res:",res," ok:",ok)
-	sb.stopStub()
-	stopSkel(sk)*/
+	res,err:=st.invoke(fn,arg1,arg2)
+	fmt.Println("TEST RESULT:(",arg1,")+(",arg2,")=",(*res)[0]," err:",err)
+	st.close()
+	sk.close()
 }
 
+func Test3Calls(t *testing.T) {
+	quit:=make(chan int)
+	r1,w1:=io.Pipe()
+	r2,w2:=io.Pipe()
+	localSocket:=newMemSocket(r1, w2)
+	remoteSocket:=newMemSocket(r2, w1)
+	st:=newStub("local:",localSocket)
+	var somes someskeletor
+	sk:=newSkel(remoteSocket,&somes)
+	go func() {
+		fn:=2
+		arg1:=2
+		arg2:=7
+		fmt.Println("invoking function#",fn," with args:",arg1,arg2)
+		res,err:=st.invoke(fn,arg1,arg2)
+		fmt.Println("TEST 1 RESULT:(",arg1,")+(",arg2,")=",(*res)[0]," err:",err)
+		quit<-1
+	}()
+	go func() {
+		fn:=2
+		arg1:=1
+		arg2:=3
+		fmt.Println("invoking function#",fn," with args:",arg1,arg2)
+		res,err:=st.invoke(fn,arg1,arg2)
+		fmt.Println("TEST 2 RESULT:(",arg1,")+(",arg2,")=",(*res)[0]," err:",err)
+		quit<-1
+	}()
+	go func() {
+		fn:=2
+		arg1:=1
+		arg2:=1
+		fmt.Println("invoking function#",fn," with args:",arg1,arg2)
+		res,err:=st.invoke(fn,arg1,arg2)
+		fmt.Println("TEST 3 RESULT:(",arg1,")+(",arg2,")=",(*res)[0]," err:",err)
+		quit<-1
+	}()
+	<-quit
+	<-quit
+	<-quit
+	st.close()
+	sk.close()
+}
 

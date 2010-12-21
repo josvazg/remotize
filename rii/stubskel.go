@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	quit=-1
+	quit = -1
 )
 
 var stubs mapper.Mapper
@@ -45,19 +45,19 @@ type response struct {
 }
 
 type stub struct {
-	rwc	io.ReadWriteCloser
-	quit	chan int
-	e	*gob.Encoder
-	d      *gob.Decoder
-	alive    bool
-	iface    *reflect.InterfaceType
-	url      string
-	ch       chan *invocontext
+	rwc     io.ReadWriteCloser
+	quit    chan int
+	e       *gob.Encoder
+	d       *gob.Decoder
+	alive   bool
+	iface   *reflect.InterfaceType
+	url     string
+	ch      chan *invocontext
 	id2ictx map[int]*invocontext
 }
 
 func newStub(url string, rwc io.ReadWriteCloser) *stub {
-	st:=&stub{rwc,make(chan int),
+	st := &stub{rwc, make(chan int),
 		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true,
 		nil, url, make(chan *invocontext), make(map[int]*invocontext)}
 	go returnIn(st)
@@ -83,8 +83,8 @@ func (st *stub) invoke(funcNum int, args ...interface{}) (results *[]interface{}
 }
 
 func (st *stub) close() {
-	if(st.alive) {
-		fmt.Println("close stub")	
+	if st.alive {
+		fmt.Println("close stub")
 		st.alive = false
 		st.rwc.Close()
 		<-st.quit
@@ -96,15 +96,15 @@ func invocOut(st *stub) {
 	id := 0
 	for st.alive {
 		ictx := <-st.ch
-		if ictx.id==quit {
-			continue; // quit
+		if ictx.id == quit {
+			continue // quit
 		}
 		fmt.Println("stub: Got invocontext:", ictx)
 		id++
 		ictx.id = id
 		fmt.Println("stub: Update invocontext id:", ictx)
-		st.id2ictx[ictx.id]=ictx // remember invocation context
-		fmt.Println("stub: (+)pending:",st.id2ictx)
+		st.id2ictx[ictx.id] = ictx // remember invocation context
+		fmt.Println("stub: (+)pending:", st.id2ictx)
 		fmt.Println("stub: Encode invocation:", ictx.invocation)
 		err := st.e.Encode(ictx.invocation)
 		if err != nil {
@@ -115,7 +115,7 @@ func invocOut(st *stub) {
 		}
 	}
 	fmt.Println("stub: invocOut Ended")
-	st.quit<-1
+	st.quit <- 1
 }
 
 func returnIn(st *stub) {
@@ -124,52 +124,52 @@ func returnIn(st *stub) {
 		var rsp response
 		var ictx *invocontext
 		err := st.d.Decode(&rsp)
-		if(!st.alive) {
+		if !st.alive {
 			fmt.Println("stub: returnIn Stopped!")
-			continue; // quit
+			continue // quit
 		}
-		if err==os.EOF {
+		if err == os.EOF {
 			fmt.Println("stub: returnIn remotely Stopped!")
-			st.alive=false
-			continue; // quit
+			st.alive = false
+			continue // quit
 		}
-		if err==nil {
+		if err == nil {
 			ictx = st.id2ictx[rsp.id]
-			if(ictx==nil) {
-				fmt.Println("stub: No invocation context for id",rsp.id)
+			if ictx == nil {
+				fmt.Println("stub: No invocation context for id", rsp.id)
 			} else {
-				ictx.rch<-&rsp
-				st.id2ictx[rsp.id]=nil,false
-				fmt.Println("stub: (-)pending:",st.id2ictx)
+				ictx.rch <- &rsp
+				st.id2ictx[rsp.id] = nil, false
+				fmt.Println("stub: (-)pending:", st.id2ictx)
 			}
-		} else if(err!=nil) {
-			fmt.Println("stub: Got error decoding gob stream!:",err)
-		}		
+		} else if err != nil {
+			fmt.Println("stub: Got error decoding gob stream!:", err)
+		}
 	}
 	fmt.Println("stub: returnIn Ended")
-	st.ch<-&invocontext{invocation{quit, 0, nil}, nil} // quit msg
+	st.ch <- &invocontext{invocation{quit, 0, nil}, nil} // quit msg
 }
 
 type skel struct {
-	rwc	io.ReadWriteCloser
-	quit	chan int
-	e   *gob.Encoder
-	d   *gob.Decoder
+	rwc   io.ReadWriteCloser
+	quit  chan int
+	e     *gob.Encoder
+	d     *gob.Decoder
 	alive bool
-	rch	chan *response
-	s skeletor 
+	rch   chan *response
+	s     skeletor
 }
 
 func newSkel(rwc io.ReadWriteCloser, s skeletor) *skel {
-	sk:=&skel{rwc,make(chan int),
-		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true,make(chan *response),s}
+	sk := &skel{rwc, make(chan int),
+		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true, make(chan *response), s}
 	go invocIn(sk)
 	go returnOut(sk)
 	return sk
 }
 
 func (sk *skel) close() {
-	if(sk.alive) {
+	if sk.alive {
 		fmt.Println("close skel")
 		sk.alive = false
 		sk.rwc.Close()
@@ -188,14 +188,14 @@ func invocIn(sk *skel) {
 		var i invocation
 		var rsp *response
 		err := sk.d.Decode(&i)
-		if(!sk.alive) {
+		if !sk.alive {
 			fmt.Println("skel: invocIn Stopped!")
-			continue; // quit
+			continue // quit
 		}
-		if err==os.EOF {
+		if err == os.EOF {
 			fmt.Println("skel: invocIn remotely Stopped!")
-			sk.alive=false
-			continue; // quit
+			sk.alive = false
+			continue // quit
 		}
 		if err == nil {
 			id = i.id
@@ -203,7 +203,7 @@ func invocIn(sk *skel) {
 			go func(i *invocation) {
 				rsp := newResponseTo(i)
 				rsp.results = sk.s.execute(i.funcNum, i.args)
-  			    fmt.Println("skel: execution renders ", rsp)
+				fmt.Println("skel: execution renders ", rsp)
 				sk.rch <- rsp
 			}(&i)
 		} else {
@@ -213,25 +213,24 @@ func invocIn(sk *skel) {
 		}
 	}
 	fmt.Println("skel: invocIn Ended")
-	sk.rch<-&response{quit,nil,nil}
+	sk.rch <- &response{quit, nil, nil}
 }
 
 func returnOut(sk *skel) {
 	fmt.Println("skel: returnOut Started")
 	for sk.alive {
 		rsp := <-sk.rch
-		if rsp.id==quit {
+		if rsp.id == quit {
 			fmt.Println("skel: returnOut Stopped!")
-			continue; // quit
+			continue // quit
 		}
 		err := sk.e.Encode(rsp)
 		if err != nil {
 			sk.e.Encode(&response{rsp.id, nil, err})
 		} else {
-  			fmt.Println("skel: reply sent back", rsp)
+			fmt.Println("skel: reply sent back", rsp)
 		}
 	}
 	fmt.Println("skel: returnOut Ended")
-	sk.quit<-1
+	sk.quit <- 1
 }
-

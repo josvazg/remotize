@@ -5,6 +5,6 @@
 include $(GOROOT)/src/Make.inc
 
 TARG=rii
-GOFILES=stubskel.go
+GOFILES=stubskel.go remotize.go
 
 include $(GOROOT)/src/Make.pkg

@@ -10,7 +10,6 @@ package rii
 
 import (
 	"container/mapper"
-	"reflect"
 	"os"
 	"io"
 	"gob"
@@ -50,7 +49,6 @@ type stub struct {
 	e       *gob.Encoder
 	d       *gob.Decoder
 	alive   bool
-	iface   *reflect.InterfaceType
 	url     string
 	ch      chan *invocontext
 	id2ictx map[int]*invocontext
@@ -59,7 +57,7 @@ type stub struct {
 func newStub(url string, rwc io.ReadWriteCloser) *stub {
 	st := &stub{rwc, make(chan int),
 		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true,
-		nil, url, make(chan *invocontext), make(map[int]*invocontext)}
+        url, make(chan *invocontext), make(map[int]*invocontext)}
 	go returnIn(st)
 	go invocOut(st)
 	return st

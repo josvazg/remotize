@@ -70,7 +70,7 @@ func TestStubSkel(t *testing.T) {
 	r2, w2 := io.Pipe()
 	localSocket := newMemSocket(r1, w2)
 	remoteSocket := newMemSocket(r2, w1)
-	st := newStub("local:", localSocket)
+	st := newStub(localSocket)
 	var somes someskeletor
 	sk := newSkel(remoteSocket, &somes)
 	fn := 1
@@ -89,7 +89,7 @@ func Test3Calls(t *testing.T) {
 	r2, w2 := io.Pipe()
 	localSocket := newMemSocket(r1, w2)
 	remoteSocket := newMemSocket(r2, w1)
-	st := newStub("local:", localSocket)
+	st := newStub(localSocket)
 	var somes someskeletor
 	sk := newSkel(remoteSocket, &somes)
 	go func() {

@@ -1,11 +1,6 @@
 // Copyright 2010 Jose Luis Vázquez González josvazg@gmail.com
 // Use of this source code is governed by a BSD-style
 
-// rii package is the Remote Interface Invocation foundation allowing go 
-// programs to use out-of-process services defined by an interface, either
-// locally or remotelly without worring (too much or too soon) 
-// about the communications. With this package you can remotize local parts of 
-// the program or load them dynamically as a plugin.
 package rii
 
 import (

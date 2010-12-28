@@ -1,7 +1,7 @@
 package rii
 
 import (
-	"testing"
+//	"testing"
 	"fmt"
 	"io"
 	"os"
@@ -64,7 +64,7 @@ func (s *someskeletor) addnsleep(a int, b int) int {
 	time.Sleep(sleep)
 	return r
 }
-
+/*
 func TestStubSkel(t *testing.T) {
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
@@ -125,3 +125,4 @@ func Test3Calls(t *testing.T) {
 	st.close()
 	sk.close()
 }
+*/

@@ -15,6 +15,10 @@ const (
 	quit = -1
 )
 
+type Invoker interface {
+	Invoke(fn int, args ...interface{}) (r *[]interface{}, e os.Error)
+}
+
 // interface for executor implementation's to execute the remotized methods 
 type executor interface {
 	execute(funcNum int, args []interface{}) []interface{}
@@ -39,7 +43,7 @@ type response struct {
 }
 
 // stub base type (stub constructor)
-type stub struct {
+type Stub struct {
 	rwc     io.ReadWriteCloser		// The conn. or pipe to read/write gobs
 	quit    chan int				// Quit channel for closing the stub
 	e       *gob.Encoder			// Encoder to send gobs to the skel
@@ -50,8 +54,8 @@ type stub struct {
 }
 
 // stub base 'constructor' 
-func newStub(rwc io.ReadWriteCloser) *stub {
-	st := &stub{rwc, make(chan int),
+func newStub(rwc io.ReadWriteCloser) *Stub {
+	st := &Stub{rwc, make(chan int),
 		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true,
         make(chan *invocontext), make(map[int]*invocontext)}
 	go stubReceiver(st)
@@ -62,9 +66,9 @@ func newStub(rwc io.ReadWriteCloser) *stub {
 // invocation function to start the remote invocation and receive the result
 // The invocation is sent throug a channel to the stubSender() and the reply
 // is received from a channel from the stubReceiver() 
-func (st *stub) invoke(funcNum int, args ...interface{}) (results *[]interface{}, err os.Error) {
+func (st *Stub) Invoke(fn int, args ...interface{}) (*[]interface{},os.Error) {
 	rch := make(chan *response) // reply channel
-	st.ch <- &invocontext{invocation{0, funcNum, args}, rch} //invoke
+	st.ch <- &invocontext{invocation{0, fn, args}, rch} //invoke
 	rsp := <-rch // get return
 	if rsp.error != nil {
 		return nil, rsp.error
@@ -73,7 +77,7 @@ func (st *stub) invoke(funcNum int, args ...interface{}) (results *[]interface{}
 }
 
 // close the stub goroutines in an orderly manner 
-func (st *stub) close() {
+func (st *Stub) close() {
 	if st.alive {
 		st.alive = false // the loops are not alive any more
 		st.rwc.Close() // the returnReceiver is stopped
@@ -83,7 +87,7 @@ func (st *stub) close() {
 
 // stub invocation sender loop goroutine receives invocation requests and sends
 // them as gobs over a connection or pipe
-func stubSender(st *stub) {
+func stubSender(st *Stub) {
 	id := 0
 	for st.alive {
 		ictx := <-st.ch
@@ -104,7 +108,7 @@ func stubSender(st *stub) {
 
 // stub response receiver gets gob responses and, after looking up the
 // invocontext by id, it replies to the right invoke() goroutine
-func stubReceiver(st *stub) {
+func stubReceiver(st *Stub) {
 	for st.alive {
 		var rsp response
 		var ictx *invocontext
@@ -134,7 +138,7 @@ func stubReceiver(st *stub) {
 }
 
 // skel base type (server side)
-type skel struct {
+type Skel struct {
 	rwc   io.ReadWriteCloser 	// The conn. or pipe to read/write gobs
 	quit  chan int				// The quit channel (just like in the stub)
 	e     *gob.Encoder			// Gobs encoder
@@ -145,8 +149,8 @@ type skel struct {
 }
 
 // skel base 'constructor'
-func newSkel(rwc io.ReadWriteCloser, x executor) *skel {
-	sk := &skel{rwc, make(chan int),
+func NewSkel(rwc io.ReadWriteCloser, x executor) *Skel {
+	sk := &Skel{rwc, make(chan int),
 		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true, make(chan *response), x}
 	go skelReplier(sk)	
 	go skelReceiver(sk)
@@ -155,7 +159,7 @@ func newSkel(rwc io.ReadWriteCloser, x executor) *skel {
 
 // close the skel by closing first the reader at skelReceiver() and waiting 
 // for the quit signal from the skelReplier() 
-func (sk *skel) close() {
+func (sk *Skel) close() {
 	if sk.alive {
 		sk.alive = false
 		sk.rwc.Close()
@@ -170,7 +174,7 @@ func newResponseTo(i *invocation) *response {
 
 // skel invocation receiver gets invocation gobs and launches a goroutine to
 // execute them. The reply will go back via channel's msg to the skelReplier()
-func skelReceiver(sk *skel) {
+func skelReceiver(sk *Skel) {
 	id := 0
 	for sk.alive {
 		var i invocation
@@ -203,7 +207,7 @@ func skelReceiver(sk *skel) {
 
 // skel replier send the executions results or error gobs back to the 
 // client stub
-func skelReplier(sk *skel) {
+func skelReplier(sk *Skel) {
 	for sk.alive {
 		rsp := <-sk.rch
 		if rsp.id == quit { // got quit signal

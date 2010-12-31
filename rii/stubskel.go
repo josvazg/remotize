@@ -15,20 +15,19 @@ const (
 	quit = -1
 )
 
+// Invoker interface to satifly by any rii like remotizing transport
+//
+// Invoke() function will call the function number (fn) with arguments (args) 
+// and get their results (r) or an error (e)
 type Invoker interface {
 	Invoke(fn int, args ...interface{}) (r *[]interface{}, e os.Error)
-}
-
-// interface for executor implementation's to execute the remotized methods 
-type executor interface {
-	execute(funcNum int, args []interface{}) []interface{}
 }
 
 // invocation message 
 type invocation struct {
 	id      int	// identifier of the invocation in the asynchronous channel
 	funcNum int	// function number to identify the invoked function
-	args    []interface{} // input arguments to send to the server skeletor
+	args    *[]interface{} // input arguments to send to the server skeletor
 }
 
 type invocontext struct {
@@ -37,14 +36,15 @@ type invocontext struct {
 }
 
 type response struct {
-	id      int		// identifier of the invocation 
-	results []interface{} // output results of the remote executions
-	error   os.Error	// error msg (if any, nil otherwise)
+	id      int				// identifier of the invocation 
+	results *[]interface{}	// output results of the remote executions
+	error   os.Error		// error msg (if any, nil otherwise)
 }
 
 // stub base type (stub constructor)
 type Stub struct {
-	rwc     io.ReadWriteCloser		// The conn. or pipe to read/write gobs
+	r		io.ReadCloser			// The conn. or pipe to read gobs from
+	w		io.Writer				// The conn. or pipe to write gobs to
 	quit    chan int				// Quit channel for closing the stub
 	e       *gob.Encoder			// Encoder to send gobs to the skel
 	d       *gob.Decoder			// Decoder to receive gobs from the skel
@@ -54,9 +54,9 @@ type Stub struct {
 }
 
 // stub base 'constructor' 
-func newStub(rwc io.ReadWriteCloser) *Stub {
-	st := &Stub{rwc, make(chan int),
-		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true,
+func NewStub(r io.ReadCloser, w io.Writer) *Stub {
+	st := &Stub{r,w, make(chan int),
+		gob.NewEncoder(w), gob.NewDecoder(r), true,
         make(chan *invocontext), make(map[int]*invocontext)}
 	go stubReceiver(st)
 	go stubSender(st)
@@ -68,19 +68,19 @@ func newStub(rwc io.ReadWriteCloser) *Stub {
 // is received from a channel from the stubReceiver() 
 func (st *Stub) Invoke(fn int, args ...interface{}) (*[]interface{},os.Error) {
 	rch := make(chan *response) // reply channel
-	st.ch <- &invocontext{invocation{0, fn, args}, rch} //invoke
+	st.ch <- &invocontext{invocation{0, fn, &args}, rch} //invoke
 	rsp := <-rch // get return
 	if rsp.error != nil {
 		return nil, rsp.error
 	}
-	return &rsp.results, nil
+	return rsp.results, nil
 }
 
 // close the stub goroutines in an orderly manner 
 func (st *Stub) close() {
 	if st.alive {
 		st.alive = false // the loops are not alive any more
-		st.rwc.Close() // the returnReceiver is stopped
+		st.r.Close() // the returnReceiver is stopped
 		<-st.quit		// wait for the invocationSender to end
 	}
 }
@@ -137,24 +137,37 @@ func stubReceiver(st *Stub) {
 	st.ch <- &invocontext{invocation{quit, 0, nil}, nil} // quit msg
 }
 
+// Exported Function type
+type ExportedFunc func(interface{},*[]interface{}) *[]interface{}
+
 // skel base type (server side)
 type Skel struct {
-	rwc   io.ReadWriteCloser 	// The conn. or pipe to read/write gobs
-	quit  chan int				// The quit channel (just like in the stub)
-	e     *gob.Encoder			// Gobs encoder
-	d     *gob.Decoder			// gobs decoder
-	alive bool					// 'Is the skel alive' flag
-	rch   chan *response		// reply channel
-	x     executor				// executor will execute the remotized interface
+	r		io.ReadCloser			// The conn. or pipe to read gobs from
+	w		io.Writer				// The conn. or pipe to write gobs to
+	quit	chan int				// The quit channel (just like in the stub)
+	e		*gob.Encoder			// Gobs encoder
+	d		*gob.Decoder			// gobs decoder
+	alive	bool					// 'Is the skel alive' flag
+	rch		chan *response			// reply channel
+	iface	interface{}				// Interface exported by this Skel(etor)	
+	funcs	[]ExportedFunc			// array of exported functions
 }
 
 // skel base 'constructor'
-func NewSkel(rwc io.ReadWriteCloser, x executor) *Skel {
-	sk := &Skel{rwc, make(chan int),
-		gob.NewEncoder(rwc), gob.NewDecoder(rwc), true, make(chan *response), x}
-	go skelReplier(sk)	
-	go skelReceiver(sk)
-	return sk
+func NewSkel(r io.ReadCloser, w io.Writer, iface interface{}) *Skel {
+	return &Skel{r, w, make(chan int),gob.NewEncoder(w), gob.NewDecoder(r), 
+		true, make(chan *response),iface, nil}
+}
+
+// skel method to add an exported function (call order matters)
+func (sk* Skel) Add(f ExportedFunc) {
+	sk.funcs=append(sk.funcs,f)
+}
+
+// skel blocking loop handler
+func (sk* Skel) Serve() {
+	go skelReplier(sk)
+	skelReceiver(sk)
 }
 
 // close the skel by closing first the reader at skelReceiver() and waiting 
@@ -162,7 +175,7 @@ func NewSkel(rwc io.ReadWriteCloser, x executor) *Skel {
 func (sk *Skel) close() {
 	if sk.alive {
 		sk.alive = false
-		sk.rwc.Close()
+		sk.r.Close()
 		<-sk.quit
 	}
 }
@@ -191,7 +204,7 @@ func skelReceiver(sk *Skel) {
 			id = i.id
 			go func(i *invocation) { // execute invocation
 				rsp := newResponseTo(i)
-				rsp.results = sk.x.execute(i.funcNum, i.args)
+				rsp.results = sk.funcs[i.funcNum-1](sk.iface, i.args)
 				fmt.Println("skel: execution renders ", rsp)
 				sk.rch <- rsp
 			}(&i)

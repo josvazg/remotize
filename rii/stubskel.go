@@ -1,4 +1,4 @@
-// Copyright 2010 Jose Luis Vázquez González josvazg@gmail.com
+// Copyright 2011 Jose Luis Vázquez González josvazg@gmail.com
 // Use of this source code is governed by a BSD-style
 
 package rii
@@ -15,7 +15,7 @@ const (
 	quit = -1
 )
 
-// Invoker interface to satifly by any rii like remotizing transport
+// Invoker interface to satify by any rii like remotizing transport
 //
 // Invoke() function will call the function number (fn) with arguments (args) 
 // and get their results (r) or an error (e)
@@ -51,6 +51,27 @@ type Stub struct {
 	alive   bool					// 'Stub is alive' flag
 	ch      chan *invocontext		// Channel to the invocation sender 
 	pending map[int]*invocontext    // Pending invocation contexts
+}
+
+func (i invocation) String() string {
+	args:="<nil>"
+	if(i.args!=nil) {
+		args=fmt.Sprintf("%v",*i.args)
+	}
+	return fmt.Sprintf("{id=%v fn=%v args:%v}",i.id,i.funcNum,args)
+}
+
+func (r response) String() string {
+	res:="<nil>"
+	if(r.results!=nil) {
+		res=fmt.Sprintf("%v",*r.results)
+	}
+	return fmt.Sprintf("{id=%v results:%v error=%v}",r.id,res,r.error)
+}
+
+// stub logs
+func log(a ...interface{}) {
+	fmt.Fprintln(os.Stderr, a...)
 }
 
 // stub base 'constructor' 
@@ -98,11 +119,13 @@ func stubSender(st *Stub) {
 		ictx.id = id
 		st.pending[ictx.id] = ictx // remember pending invocation context
 		err := st.e.Encode(ictx.invocation) // Encode=send invocation
+		//log("stubSender sent",ictx.invocation)
 		if err != nil {
 			ictx.rch <- &response{id, nil, err} // send/encode error
+			log("subSender sent error response to stubReceiver")
 		}
 	}
-	fmt.Println("stubSender closed")
+	log("stubSender closed")
 	st.quit <- 1
 }
 
@@ -113,9 +136,10 @@ func stubReceiver(st *Stub) {
 		var rsp response
 		var ictx *invocontext
 		err := st.d.Decode(&rsp)
+		//log("stubReceiver got ",rsp)
 		if err == os.EOF { // EOF?
 			if(st.alive) { // got quit signal by colsing the reader
-				fmt.Println("warn: stubReceiver remotely stopped!")
+				log("warn: stubReceiver remotely stopped!")
 				st.alive = false // remote quit
 			}
 			continue // quit
@@ -123,17 +147,16 @@ func stubReceiver(st *Stub) {
 		if err == nil {
 			ictx = st.pending[rsp.id]
 			if ictx == nil {
-				fmt.Println("error: stubReceiver got no invocontext for id",
-							rsp.id)
+				log("error: stubReceiver got no invocontext for id",rsp.id)
 			} else {
 				ictx.rch <- &rsp // reply back to the invoke() function
 				st.pending[rsp.id] = nil, false // forget the invocontext
 			}
 		} else if err != nil {
-			fmt.Println("stub: Got error decoding gob stream!:", err)
+			log("stub: Got error decoding gob stream!:", err)
 		}
 	}
-	fmt.Println("stubReceiver closed")
+	log("stubReceiver closed")
 	st.ch <- &invocontext{invocation{quit, 0, nil}, nil} // quit msg
 }
 
@@ -195,17 +218,18 @@ func skelReceiver(sk *Skel) {
 		err := sk.d.Decode(&i)
 		if err == os.EOF { // EOF?
 			if(sk.alive) { // got quit signal by colsing the reader
-				fmt.Println("skel warn: skelReceiver remotely stopped!")
+				log("skel warn: skelReceiver remotely stopped!")
 				sk.alive = false // remote quit
 			}
 			continue // quit
 		}
 		if err == nil {
 			id = i.id
+			//log("skelReceiver gets ",i)
 			go func(i *invocation) { // execute invocation
 				rsp := newResponseTo(i)
 				rsp.results = sk.funcs[i.funcNum-1](sk.iface, i.args)
-				fmt.Println("skel: execution renders ", rsp)
+				//log("skel: execution renders ", rsp)
 				sk.rch <- rsp
 			}(&i)
 		} else { // report error back
@@ -214,7 +238,7 @@ func skelReceiver(sk *Skel) {
 			sk.rch <- rsp
 		}
 	}
-	fmt.Println("skelReceiver() closed")
+	log("skelReceiver() closed")
 	sk.rch <- &response{quit, nil, nil} // quit skelReplier
 }
 
@@ -227,11 +251,12 @@ func skelReplier(sk *Skel) {
 			continue // quit
 		}
 		err := sk.e.Encode(rsp) // sent respone back to the client stub
+		//log("skelReplier sends ", rsp)	
 		if err != nil { // sent error repling...
 			sk.e.Encode(&response{rsp.id, nil, err})
 		}
 	}
-	fmt.Println("skelReplier closed")
+	log("skelReplier closed")
 	sk.quit <- 1
 }
 

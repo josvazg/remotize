@@ -1,391 +1,0 @@
-amd64
-  exports automatically generated from
-  calcskel.go in package "riisample"
-
-$$  // exports
-    package riisample
-	import os "os"
-	type "os".Error interface { String() string }
-	type "".Calc interface { add(op1 float, op2 float) (? float, ? "os".Error); divide(op1 float, op2 float) (? float, ? "os".Error); multiply(op1 float, op2 float) (? float, ? "os".Error); subtract(op1 float, op2 float) (? float, ? "os".Error) }
-	import rii "rii"
-	type "rii".Stub struct { r "io".ReadCloser; w "io".Writer; quit chan int; e *"gob".Encoder; d *"gob".Decoder; alive bool; ch chan *"rii".invocontext; pending map[int] *"rii".invocontext }
-	func (st *"rii".Stub) Invoke (fn int, args ...interface { }) (? *[]interface { }, ? "os".Error)
-	func (st *"rii".Stub) close ()
-	import io "io"
-	type "io".ReadCloser interface { Close() "os".Error; Read(p []uint8) (n int, err "os".Error) }
-	type "io".Writer interface { Write(p []uint8) (n int, err "os".Error) }
-	import gob "gob"
-	import reflect "reflect"
-	type "reflect".Value interface { Addr() uintptr; CanSet() bool; Interface() interface { }; Method(i int) *"reflect".FuncValue; SetValue(v "reflect".Value); Type() "reflect".Type; getAddr() "reflect".addr }
-	type "reflect".FuncValue struct { ? "reflect".value :"func"; first *"reflect".value; isInterface bool }
-	func (fv *"reflect".FuncValue) Call (in []"reflect".Value) []"reflect".Value
-	func (v *"reflect".FuncValue) Get () uintptr
-	func (v *"reflect".FuncValue) IsNil () bool
-	func (v *"reflect".FuncValue) Set (x *"reflect".FuncValue)
-	func (v *"reflect".FuncValue) SetValue (x "reflect".Value)
-	type "reflect".Type interface { Align() int; Bits() int; FieldAlign() int; Kind() "reflect".Kind; Method(? int) "reflect".Method; Name() string; NumMethod() int; PkgPath() string; Size() uintptr; String() string; uncommon() *"reflect".uncommonType }
-	type "reflect".Kind uint8
-	func (k "reflect".Kind) String () string
-	type "reflect".Method struct { PkgPath string; Name string; Type *"reflect".FuncType; Func *"reflect".FuncValue }
-	type "reflect".FuncType struct { ? "reflect".commonType :"func"; dotdotdot bool; in []*"runtime".Type; out []*"runtime".Type }
-	func (t *"reflect".FuncType) DotDotDot () bool
-	func (t *"reflect".FuncType) In (i int) "reflect".Type
-	func (t *"reflect".FuncType) NumIn () int
-	func (t *"reflect".FuncType) NumOut () int
-	func (t *"reflect".FuncType) Out (i int) "reflect".Type
-	type "reflect".commonType struct { size uintptr; hash uint32; alg uint8; align uint8; fieldAlign uint8; kind uint8; string *string; ? *"reflect".uncommonType }
-	func (t *"reflect".commonType) Align () int
-	func (t *"reflect".commonType) Bits () int
-	func (t *"reflect".commonType) FieldAlign () int
-	func (t *"reflect".commonType) Kind () "reflect".Kind
-	func (t *"reflect".commonType) Method (i int) "reflect".Method
-	func (t *"reflect".commonType) Name () string
-	func (t *"reflect".commonType) NumMethod () int
-	func (t *"reflect".commonType) PkgPath () string
-	func (t *"reflect".commonType) Size () uintptr
-	func (t *"reflect".commonType) String () string
-	type "reflect".uncommonType struct { name *string; pkgPath *string; methods []"reflect".method }
-	func (t *"reflect".uncommonType) Method (i int) "reflect".Method
-	func (t *"reflect".uncommonType) Name () string
-	func (t *"reflect".uncommonType) NumMethod () int
-	func (t *"reflect".uncommonType) PkgPath () string
-	func (t *"reflect".uncommonType) uncommon () *"reflect".uncommonType
-	type "reflect".method struct { name *string; pkgPath *string; mtyp *"runtime".Type; typ *"runtime".Type; ifn "unsafe".Pointer; tfn "unsafe".Pointer }
-	import runtime "runtime"
-	type "runtime".Type interface { }
-	import unsafe "unsafe"
-	type "unsafe".Pointer *any
-	type "reflect".addr *any
-	type "reflect".value struct { typ "reflect".Type; addr "reflect".addr; canSet bool }
-	func (v *"reflect".value) Addr () uintptr
-	func (v *"reflect".value) CanSet () bool
-	func (v *"reflect".value) Interface () interface { }
-	func (v *"reflect".value) Method (i int) *"reflect".FuncValue
-	func (v *"reflect".value) Type () "reflect".Type
-	func (v *"reflect".value) getAddr () "reflect".addr
-	type "gob".encEngine struct { instr []"gob".encInstr }
-	type "gob".encInstr struct { op "gob".encOp; field int; indir int; offset uintptr }
-	type "gob".encOp func(i *"gob".encInstr, state *"gob".encoderState, p "unsafe".Pointer)
-	type "gob".encoderState struct { enc *"gob".Encoder; b *"bytes".Buffer; sendZero bool; fieldnum int; buf [9]uint8 }
-	func (state *"gob".encoderState) update (instr *"gob".encInstr)
-	import bytes "bytes"
-	type "io".Reader interface { Read(p []uint8) (n int, err "os".Error) }
-	type "bytes".Buffer struct { buf []uint8; off int; runeBytes [4]uint8; bootstrap [64]uint8 }
-	func (b *"bytes".Buffer) Bytes () []uint8
-	func (b *"bytes".Buffer) Len () int
-	func (b *"bytes".Buffer) Next (n int) []uint8
-	func (b *"bytes".Buffer) Read (p []uint8) (n int, err "os".Error)
-	func (b *"bytes".Buffer) ReadByte () (c uint8, err "os".Error)
-	func (b *"bytes".Buffer) ReadFrom (r "io".Reader) (n int64, err "os".Error)
-	func (b *"bytes".Buffer) ReadRune () (r int, size int, err "os".Error)
-	func (b *"bytes".Buffer) Reset ()
-	func (b *"bytes".Buffer) String () string
-	func (b *"bytes".Buffer) Truncate (n int)
-	func (b *"bytes".Buffer) Write (p []uint8) (n int, err "os".Error)
-	func (b *"bytes".Buffer) WriteByte (c uint8) "os".Error
-	func (b *"bytes".Buffer) WriteRune (r int) (n int, err "os".Error)
-	func (b *"bytes".Buffer) WriteString (s string) (n int, err "os".Error)
-	func (b *"bytes".Buffer) WriteTo (w "io".Writer) (n int64, err "os".Error)
-	func (b *"bytes".Buffer) grow (n int) int
-	type "reflect".InterfaceValue struct { ? "reflect".value :"interface" }
-	func (v *"reflect".InterfaceValue) Elem () "reflect".Value
-	func (v *"reflect".InterfaceValue) Get () [2]uintptr
-	func (v *"reflect".InterfaceValue) IsNil () bool
-	func (v *"reflect".InterfaceValue) Method (i int) *"reflect".FuncValue
-	func (v *"reflect".InterfaceValue) Set (x "reflect".Value)
-	func (v *"reflect".InterfaceValue) SetValue (x "reflect".Value)
-	type "reflect".MapValue struct { ? "reflect".value :"map" }
-	func (v *"reflect".MapValue) Elem (key "reflect".Value) "reflect".Value
-	func (v *"reflect".MapValue) Get () uintptr
-	func (v *"reflect".MapValue) IsNil () bool
-	func (v *"reflect".MapValue) Keys () []"reflect".Value
-	func (v *"reflect".MapValue) Len () int
-	func (v *"reflect".MapValue) Set (x *"reflect".MapValue)
-	func (v *"reflect".MapValue) SetElem (key "reflect".Value, val "reflect".Value)
-	func (v *"reflect".MapValue) SetValue (x "reflect".Value)
-	type "gob".Encoder struct { mutex "sync".Mutex; w "io".Writer; sent map["reflect".Type] "gob".typeId; state *"gob".encoderState; countState *"gob".encoderState; buf []uint8; err "os".Error }
-	func (enc *"gob".Encoder) Encode (e interface { }) "os".Error
-	func (enc *"gob".Encoder) EncodeValue (value "reflect".Value) "os".Error
-	func (enc *"gob".Encoder) badType (rt "reflect".Type)
-	func (enc *"gob".Encoder) compileEnc (rt "reflect".Type) *"gob".encEngine
-	func (enc *"gob".Encoder) encOpFor (rt "reflect".Type) (? "gob".encOp, ? int)
-	func (enc *"gob".Encoder) encode (b *"bytes".Buffer, value "reflect".Value) "os".Error
-	func (enc *"gob".Encoder) encodeArray (b *"bytes".Buffer, p uintptr, op "gob".encOp, elemWid uintptr, elemIndir int, length int)
-	func (enc *"gob".Encoder) encodeInterface (b *"bytes".Buffer, iv *"reflect".InterfaceValue)
-	func (enc *"gob".Encoder) encodeMap (b *"bytes".Buffer, mv *"reflect".MapValue, keyOp "gob".encOp, elemOp "gob".encOp, keyIndir int, elemIndir int)
-	func (enc *"gob".Encoder) encodeSingle (b *"bytes".Buffer, engine *"gob".encEngine, basep uintptr)
-	func (enc *"gob".Encoder) encodeStruct (b *"bytes".Buffer, engine *"gob".encEngine, basep uintptr)
-	func (enc *"gob".Encoder) getEncEngine (rt "reflect".Type) *"gob".encEngine
-	func (enc *"gob".Encoder) lockAndGetEncEngine (rt "reflect".Type) *"gob".encEngine
-	func (enc *"gob".Encoder) send ()
-	func (enc *"gob".Encoder) sendType (origt "reflect".Type) bool
-	func (enc *"gob".Encoder) sendTypeDescriptor (rt "reflect".Type)
-	func (enc *"gob".Encoder) setError (err "os".Error)
-	import sync "sync"
-	type "sync".Mutex struct { key uint32; sema uint32 }
-	func (m *"sync".Mutex) Lock ()
-	func (m *"sync".Mutex) Unlock ()
-	type "gob".gobType interface { Name() string; id() "gob".typeId; safeString(seen map["gob".typeId] bool) string; setId(id "gob".typeId); string() string }
-	type "gob".typeId int32
-	func (t "gob".typeId) Name () string
-	func (t "gob".typeId) gobType () "gob".gobType
-	func (t "gob".typeId) string () string
-	type "gob".decEngine struct { instr []"gob".decInstr; numInstr int }
-	type "gob".decInstr struct { op "gob".decOp; field int; indir int; offset uintptr; ovfl "os".ErrorString }
-	type "gob".decOp func(i *"gob".decInstr, state *"gob".decodeState, p "unsafe".Pointer)
-	type "gob".decodeState struct { dec *"gob".Decoder; b **"bytes".Buffer; fieldnum int; buf []uint8 }
-	type "os".ErrorString string
-	func (e "os".ErrorString) String () string
-	func (e "os".ErrorString) Temporary () bool
-	func (e "os".ErrorString) Timeout () bool
-	type "reflect".ArrayType struct { ? "reflect".commonType :"array"; elem *"runtime".Type; len uintptr }
-	func (t *"reflect".ArrayType) Elem () "reflect".Type
-	func (t *"reflect".ArrayType) Len () int
-	type "reflect".InterfaceType struct { ? "reflect".commonType :"interface"; methods []"reflect".imethod }
-	func (t *"reflect".InterfaceType) Method (i int) "reflect".Method
-	func (t *"reflect".InterfaceType) NumMethod () int
-	type "reflect".imethod struct { name *string; pkgPath *string; typ *"runtime".Type }
-	type "reflect".MapType struct { ? "reflect".commonType :"map"; key *"runtime".Type; elem *"runtime".Type }
-	func (t *"reflect".MapType) Elem () "reflect".Type
-	func (t *"reflect".MapType) Key () "reflect".Type
-	type "reflect".SliceType struct { ? "reflect".commonType :"slice"; elem *"runtime".Type }
-	func (t *"reflect".SliceType) Elem () "reflect".Type
-	type "reflect".StructField struct { PkgPath string; Name string; Type "reflect".Type; Tag string; Offset uintptr; Index []int; Anonymous bool }
-	type "reflect".StructType struct { ? "reflect".commonType :"struct"; fields []"reflect".structField }
-	func (t *"reflect".StructType) Field (i int) "reflect".StructField
-	func (t *"reflect".StructType) FieldByIndex (index []int) "reflect".StructField
-	func (t *"reflect".StructType) FieldByName (name string) (f "reflect".StructField, present bool)
-	func (t *"reflect".StructType) FieldByNameFunc (match func(? string) bool) (f "reflect".StructField, present bool)
-	func (t *"reflect".StructType) NumField () int
-	func (t *"reflect".StructType) fieldByNameFunc (match func(? string) bool, mark map[*"reflect".StructType] bool, depth int) (ff "reflect".StructField, fd int)
-	type "reflect".structField struct { name *string; pkgPath *string; typ *"runtime".Type; tag *string; offset uintptr }
-	type "gob".Decoder struct { mutex "sync".Mutex; r "io".Reader; wireType map["gob".typeId] *"gob".wireType; decoderCache map["reflect".Type] map["gob".typeId] **"gob".decEngine; ignorerCache map["gob".typeId] **"gob".decEngine; state *"gob".decodeState; countState *"gob".decodeState; buf []uint8; countBuf [9]uint8; byteBuffer *"bytes".Buffer; err "os".Error }
-	func (dec *"gob".Decoder) Decode (e interface { }) "os".Error
-	func (dec *"gob".Decoder) DecodeValue (value "reflect".Value) "os".Error
-	func (dec *"gob".Decoder) compatibleType (fr "reflect".Type, fw "gob".typeId) bool
-	func (dec *"gob".Decoder) compileDec (remoteId "gob".typeId, rt "reflect".Type) (engine *"gob".decEngine, err "os".Error)
-	func (dec *"gob".Decoder) compileSingle (remoteId "gob".typeId, rt "reflect".Type) (engine *"gob".decEngine, err "os".Error)
-	func (dec *"gob".Decoder) decIgnoreOpFor (wireId "gob".typeId) "gob".decOp
-	func (dec *"gob".Decoder) decOpFor (wireId "gob".typeId, rt "reflect".Type, name string) (? "gob".decOp, ? int)
-	func (dec *"gob".Decoder) decode (wireId "gob".typeId, val "reflect".Value) "os".Error
-	func (dec *"gob".Decoder) decodeArray (atyp *"reflect".ArrayType, state *"gob".decodeState, p uintptr, elemOp "gob".decOp, elemWid uintptr, length int, indir int, elemIndir int, ovfl "os".ErrorString)
-	func (dec *"gob".Decoder) decodeArrayHelper (state *"gob".decodeState, p uintptr, elemOp "gob".decOp, elemWid uintptr, length int, elemIndir int, ovfl "os".ErrorString)
-	func (dec *"gob".Decoder) decodeInterface (ityp *"reflect".InterfaceType, state *"gob".decodeState, p uintptr, indir int)
-	func (dec *"gob".Decoder) decodeMap (mtyp *"reflect".MapType, state *"gob".decodeState, p uintptr, keyOp "gob".decOp, elemOp "gob".decOp, indir int, keyIndir int, elemIndir int, ovfl "os".ErrorString)
-	func (dec *"gob".Decoder) decodeSingle (engine *"gob".decEngine, rtyp "reflect".Type, b **"bytes".Buffer, p uintptr, indir int) "os".Error
-	func (dec *"gob".Decoder) decodeSlice (atyp *"reflect".SliceType, state *"gob".decodeState, p uintptr, elemOp "gob".decOp, elemWid uintptr, indir int, elemIndir int, ovfl "os".ErrorString)
-	func (dec *"gob".Decoder) decodeStruct (engine *"gob".decEngine, rtyp *"reflect".StructType, b **"bytes".Buffer, p uintptr, indir int) "os".Error
-	func (dec *"gob".Decoder) decodeValueFromBuffer (value "reflect".Value, ignoreInterfaceValue bool, countPresent bool)
-	func (dec *"gob".Decoder) getDecEnginePtr (remoteId "gob".typeId, rt "reflect".Type) (enginePtr **"gob".decEngine, err "os".Error)
-	func (dec *"gob".Decoder) getIgnoreEnginePtr (wireId "gob".typeId) (enginePtr **"gob".decEngine, err "os".Error)
-	func (dec *"gob".Decoder) ignoreArray (state *"gob".decodeState, elemOp "gob".decOp, length int)
-	func (dec *"gob".Decoder) ignoreArrayHelper (state *"gob".decodeState, elemOp "gob".decOp, length int)
-	func (dec *"gob".Decoder) ignoreInterface (state *"gob".decodeState)
-	func (dec *"gob".Decoder) ignoreMap (state *"gob".decodeState, keyOp "gob".decOp, elemOp "gob".decOp)
-	func (dec *"gob".Decoder) ignoreSlice (state *"gob".decodeState, elemOp "gob".decOp)
-	func (dec *"gob".Decoder) ignoreStruct (engine *"gob".decEngine, b **"bytes".Buffer) "os".Error
-	func (dec *"gob".Decoder) recv ()
-	func (dec *"gob".Decoder) recvType (id "gob".typeId)
-	type "gob".wireType struct { arrayT *"gob".arrayType; sliceT *"gob".sliceType; structT *"gob".structType; mapT *"gob".mapType }
-	func (w *"gob".wireType) name () string
-	type "gob".arrayType struct { ? "gob".commonType; Elem "gob".typeId; Len int }
-	func (a *"gob".arrayType) safeString (seen map["gob".typeId] bool) string
-	func (a *"gob".arrayType) string () string
-	type "gob".commonType struct { name string; _id "gob".typeId }
-	func (t *"gob".commonType) Name () string
-	func (t *"gob".commonType) id () "gob".typeId
-	func (t *"gob".commonType) safeString (seen map["gob".typeId] bool) string
-	func (t *"gob".commonType) setId (id "gob".typeId)
-	func (t *"gob".commonType) string () string
-	type "gob".sliceType struct { ? "gob".commonType; Elem "gob".typeId }
-	func (s *"gob".sliceType) safeString (seen map["gob".typeId] bool) string
-	func (s *"gob".sliceType) string () string
-	type "gob".structType struct { ? "gob".commonType; field []*"gob".fieldType }
-	func (s *"gob".structType) safeString (seen map["gob".typeId] bool) string
-	func (s *"gob".structType) string () string
-	type "gob".fieldType struct { name string; id "gob".typeId }
-	type "gob".mapType struct { ? "gob".commonType; Key "gob".typeId; Elem "gob".typeId }
-	func (m *"gob".mapType) safeString (seen map["gob".typeId] bool) string
-	func (m *"gob".mapType) string () string
-	type "rii".invocontext struct { ? "rii".invocation; rch chan *"rii".response }
-	type "rii".invocation struct { id int; funcNum int; args *[]interface { } }
-	type "rii".response struct { id int; results *[]interface { }; error "os".Error }
-	type "".calcstub struct { s *"rii".Stub }
-	func (cs *"".calcstub) add (op1 float, op2 float) (res float, e "os".Error)
-	func (cs *"".calcstub) divide (op1 float, op2 float) (res float, e "os".Error)
-	func (cs *"".calcstub) multiply (op1 float, op2 float) (res float, e "os".Error)
-	func (cs *"".calcstub) subtract (op1 float, op2 float) (res float, e "os".Error)
-	func "".f1 (calc interface { }, args *[]interface { }) *[]interface { }
-	func "".f2 (calc interface { }, args *[]interface { }) *[]interface { }
-	func "".f3 (calc interface { }, args *[]interface { }) *[]interface { }
-	func "".f4 (calc interface { }, args *[]interface { }) *[]interface { }
-	type "rii".ExportedFunc func(? interface { }, ? *[]interface { }) *[]interface { }
-	type "rii".Skel struct { r "io".ReadCloser; w "io".Writer; quit chan int; e *"gob".Encoder; d *"gob".Decoder; alive bool; rch chan *"rii".response; iface interface { }; funcs []"rii".ExportedFunc }
-	func (sk *"rii".Skel) Add (f "rii".ExportedFunc)
-	func (sk *"rii".Skel) Serve ()
-	func (sk *"rii".Skel) close ()
-	func "".newCalcSkel (r "io".ReadCloser, w "io".Writer, calc "".Calc) *"rii".Skel
-	var "".initdoneÂ· uint8
-	func "".InitÂ· ()
-
-$$  // local types
-
-$$
-
-!
-„ y</ „ y<home „ y<jose „ y<go „ y<goloader „ y<riisample „ y<calcstub.go 8      „ y<rii.a 8     ÿÿÿÿu„ y<os.a 8     ÿÿÿÿu8 8     „ y</ „ y<home „ y<jose „ y<go „ y<goloader „ y<riisample „ y<calcskel.go 8 8     „ y<rii.a 8 ;    ÿÿÿÿu„ y<io.a 8 <    ÿÿÿÿu8 g     „ q"".*calcstubÂ·add „ qtype.method(cs *"".calcstub)func(float, float) (float, os.Error) â    ‘qEh   (   u„ t"".e „ qtype.os.Error ¬   u•   t¬   u•    t           4„ t"".res    4   tr        u„ qruntime.new „ qtype.func(int32) *[2]interface { }      ‘q¬      „ s"".autotmp_0000 r       uøÿÿÿsr       uüÿÿÿs¬   ðÿÿÿs„ q	type.float „ q
-type.uint8 „ runtime.typ ¬   “q 	x
-„ t"".op1    •   t	4„ runtime.elem    4   „ qruntime.convT2E „ qtype.func(*uint8, float) interface { }      ‘q©      ©   ðÿÿÿs¬   ’™   u°     °     ¬   “q 	x
-„ t"".op2    •   t	4   4        ‘q©      ©   ðÿÿÿs¬   ’™      u°     °     „ t"".cs „ qtype.*"".calcstub ¬   ‘t¬   Ž„ rii.st ¬   „ rii.fn r       u   „ rii.args ©      ¬   ðÿÿÿs¬   Žr    øÿÿÿsr       Žr    üÿÿÿsr       Ž„ qrii.*StubÂ·Invoke      q¬       ©   (   ¬   Ž¬   •   t¬      Ž¬   •    t¬   ‹„ s"".r „ qtype.[]interface { } ¬   •Ðÿÿÿsr       ‹r    •Øÿÿÿsr       ‹r    •ÜÿÿÿsY     9   pY     M   p¬   u¡   Q     8   pr    •Øÿÿÿs&    uU     8   p¬   “q 	x
-©   •Ðÿÿÿs&       ‘uT     D   p„ qruntime.panicindex      q¬   ‘™   u„ runtime.iface ©      °     °     „ qruntime.assertE2T „ qtype.func(*uint8, interface { }) float      ‘q      4   4•   t	Y     M   p©      „ qruntime.throwreturn      q©      „ q"".*calcstubÂ·subtract â    ‘qEh   (   u¬   u•   t¬   u•    t           4   4   tr        u     ‘q¬      „ s"".autotmp_0003 ¬   èÿÿÿs¬   èÿÿÿs„ s "".autotmp_0002 r       uøÿÿÿ sr       uüÿÿÿ s¬   ðÿÿÿ s¬   “q 	x
-   •   t	4   4        ‘q©      ©   ðÿÿÿ s¬   ’™   u°     °     ¬   “q 	x
-   •   t	4   4        ‘q©      ©   ðÿÿÿ s¬   ’™      u°     °     ¬   ‘t¬   Ž¬   r       u   ©      ¬   ðÿÿÿ s¬   Žr    øÿÿÿ sr       Žr    üÿÿÿ sr       Ž     q¬       ©   (   ¬   Ž¬   •   t¬      Ž¬   •    t¬   ‹¬   •Ðÿÿÿsr       ‹r    •Øÿÿÿsr       ‹r    •ÜÿÿÿsY     ‹   pY     Ÿ   p¬   u¡   Q     Š   pr    •Øÿÿÿs&    uU     Š   p¬    “q 	x
-©    •Ðÿÿÿs&        ‘uT      –   p      q¬    ‘™    u©       °      °            ‘q       4    4•   t	Y     Ÿ   p© "      #    q© #     „ q!"".*calcstubÂ·multiply â %   ‘!qEh   (   u¬%   u•   t¬%   u•    t%           4%   4   tr &       u &    ‘q¬&      „ s""".autotmp_0005 ¬&   èÿÿÿ"s¬&   èÿÿÿ"s„ s#"".autotmp_0004 r &      uøÿÿÿ#sr &      uüÿÿÿ#s¬&   ðÿÿÿ#s¬&   “q 	x
-&   •   t	4&   4    &    ‘q©&      ©&   ðÿÿÿ#s¬&   ’™&   u°&     °&     ¬&   “q 	x
-&   •   t	4&   4    &    ‘q©&      ©&   ðÿÿÿ#s¬&   ’™&      u°&     °&     ¬&   ‘t¬&   Ž¬&   r &      u   ©&      ¬&   ðÿÿÿ#s¬&   Žr &   øÿÿÿ#sr &      Žr &   üÿÿÿ#sr &      Ž &    q¬&       ©&   (   ¬&   Ž¬&   •   t¬&      Ž¬&   •    t¬'   ‹¬'   •Ðÿÿÿsr '      ‹r '   •Øÿÿÿsr '      ‹r '   •ÜÿÿÿsY (    Ý   pY (    ñ   p¬(   u¡(   Q (    Ü   pr (   •Øÿÿÿs& (   uU (    Ü   p¬)   “q 	x
-©)   •Ðÿÿÿs& )      ‘uT )    è   p )    q¬)   ‘™)   u©)      °)     °)      )    ‘q)      4)   4•   t	Y (    ñ   p© +      ,    q© ,     „ q$"".*calcstubÂ·divide â .   ‘$qEh   (   u¬.   u•   t¬.   u•    t.           4.   4   tr /       u /    ‘q¬/      „ s%"".autotmp_0007 ¬/   èÿÿÿ%s¬/   èÿÿÿ%s„ s&"".autotmp_0006 r /      uøÿÿÿ&sr /      uüÿÿÿ&s¬/   ðÿÿÿ&s¬/   “q 	x
-/   •   t	4/   4    /    ‘q©/      ©/   ðÿÿÿ&s¬/   ’™/   u°/     °/     ¬/   “q 	x
-/   •   t	4/   4    /    ‘q©/      ©/   ðÿÿÿ&s¬/   ’™/      u°/     °/     ¬/   ‘t¬/   Ž¬/   r /      u   ©/      ¬/   ðÿÿÿ&s¬/   Žr /   øÿÿÿ&sr /      Žr /   üÿÿÿ&sr /      Ž /    q¬/       ©/   (   ¬/   Ž¬/   •   t¬/      Ž¬/   •    t¬0   ‹¬0   •Ðÿÿÿsr 0      ‹r 0   •Øÿÿÿsr 0      ‹r 0   •ÜÿÿÿsY 1    /  pY 1    C  p¬1   u¡1   Q 1    .  pr 1   •Øÿÿÿs& 1   uU 1    .  p¬2   “q 	x
-©2   •Ðÿÿÿs& 2      ‘uT 2    :  p 2    q¬2   ‘™2   u©2      °2     °2      2    ‘q2      42   4•   t	Y 1    C  p© 4      5    q© 5     „ q'"".f1 „ q(type.func(interface { }, *[]interface { }) *[]interface { } â ?   ‘'q(Ex       ur @      u„ q)type.func(int32) *[]interface { }  @    ‘q)¬@      „ s*"".&rs ¬@   Øÿÿÿ*s„ q+type."".Calc ¬A   “q +x
-©A      „ t,"".calc „ q-type.interface { } ¬A   ‘,t-¬A   ¬A   •   ,t-¬A      „ q.runtime.assertE2I „ q/type.func(*uint8, interface { }) "".Calc  A    ‘.q/©A      ¬A   Ž„ s0"".autotmp_0010 ¬A   Èÿÿÿ0s¬A      Ž¬A   Ðÿÿÿ0s¬A   “q 	x
-„ t1"".args „ qtype.*[]interface { } ¬A   •   1t& A      ‘uT A    \  p A    q¬A   ‘™A   u©A      °A     °A      A    ‘qA      4„ s"".autotmp_0008 A   4üÿÿÿs¬A   “q 	x
-¬A   •   1t& A      ‘   uT A    i  p A    q¬A   ‘™A      u©A      °A     °A      A    ‘qA      4„ "".op2 A   4   A   üÿÿÿs4„ "".op1 A   4   ©A   Èÿÿÿ0s¬A      Ž¬A   ¬A   Ž¬A       Ž A    A      4©A      ¬A   Ž„ s"".e „ qtype.os.Error ¬A   •èÿÿÿs¬A      Ž¬A   •ðÿÿÿs¬B   “q 	x
-B   4    B    ‘q©B      ©B       °B     °B     ¬B   “q x
-r B      u   ¬B   Øÿÿÿ*s©B      °B     °B     „ qruntime.append „ qtype.func(*uint8, int, []interface { }, interface { }) []interface { }  B    ‘q©B   0   ¬B   Øÿÿÿ*s°B     °B     ©C   ¬C   •èÿÿÿs¬C   Ž¬C   •ðÿÿÿs¬C      Ž„ q	runtime.convI2E „ q
-type.func(os.Error) interface { }  C    ‘	q
-©C      ©C       °C     °C     „ qtype.uint8 ¬C   “q xr C      u   ¬C   Øÿÿÿ*s©C      °C     °C      C    ‘q©C   0   ¬C   Øÿÿÿ*s°C     °C     ¬D   Øÿÿÿ*s„ t""..noname ¬D      t© D      E    q© E     „ q"".f2 â G   ‘q(Ex       ur H      u„ qruntime.new  H    ‘q)¬H      ¬H   Øÿÿÿ*s„ runtime.typ ¬I   “q +x©I      ¬I   ‘,t-¬I   ¬I   •   ,t-¬I       I    ‘.q/©I      ¬I   Ž„ s"".autotmp_0013 ¬I   Èÿÿÿs¬I      Ž¬I   Ðÿÿÿs„ qtype.float ¬I   “q x¬I   •   1t& I      ‘uT I    Á  p I    q¬I   ‘™I   u©I      °I     °I      I    ‘qI      4„ s"".autotmp_0011 I   4üÿÿÿs¬I   “q x¬I   •   1t& I      ‘   uT I    Î  p I    q¬I   ‘™I      u©I      °I     °I      I    ‘qI      4I   4   I   üÿÿÿs4I   4   ©I   Èÿÿÿs¬I      Ž¬I   ¬I   Ž¬I   8   Ž I    I      4©I      ¬I   Ž¬I   •èÿÿÿs¬I      Ž¬I   •ðÿÿÿs¬J   “q x„ runtime.elem J   4   „ qruntime.convT2E „ qtype.func(*uint8, float) interface { }  J    ‘q©J      ©J       °J     °J     ¬J   “q xr J      u   ¬J   Øÿÿÿ*s©J      °J     °J      J    ‘q©J   0   ¬J   Øÿÿÿ*s°J     °J     ©K   ¬K   •èÿÿÿs¬K   Ž¬K   •ðÿÿÿs¬K      Ž K    ‘	q
-©K      ©K       °K     °K     ¬K   “q xr K      u   ¬K   Øÿÿÿ*s©K      °K     °K      K    ‘q©K   0   ¬K   Øÿÿÿ*s°K     °K     ¬L   Øÿÿÿ*s¬L      t© L      M    q© M     „ q"".f3 â O   ‘q(Ex       ur P      u P    ‘q)¬P      ¬P   Øÿÿÿ*s¬Q   “q +x©Q      ¬Q   ‘,t-¬Q   ¬Q   •   ,t-¬Q       Q    ‘.q/©Q      ¬Q   Ž„ s"".autotmp_0016 ¬Q   Èÿÿÿs¬Q      Ž¬Q   Ðÿÿÿs¬Q   “q x¬Q   •   1t& Q      ‘uT Q    &  p Q    q¬Q   ‘™Q   u©Q      °Q     °Q      Q    ‘qQ      4„ s"".autotmp_0014 Q   4üÿÿÿs¬Q   “q x¬Q   •   1t& Q      ‘   uT Q    3  p Q    q¬Q   ‘™Q      u©Q      °Q     °Q      Q    ‘qQ      4Q   4   Q   üÿÿÿs4Q   4   ©Q   Èÿÿÿs¬Q      Ž¬Q   ¬Q   Ž¬Q   0   Ž Q    Q      4©Q      ¬Q   Ž¬Q   •èÿÿÿs¬Q      Ž¬Q   •ðÿÿÿs¬R   “q xR   4    R    ‘q©R      ©R       °R     °R     „ qtype.[]interface { } ¬R   “q xr R      u   ¬R   Øÿÿÿ*s©R      °R     °R      R    ‘q©R   0   ¬R   Øÿÿÿ*s°R     °R     ©S   ¬S   •èÿÿÿs¬S   Ž¬S   •ðÿÿÿs¬S      Ž S    ‘	q
-©S      ©S       °S     °S     ¬S   “q xr S      u   ¬S   Øÿÿÿ*s©S      °S     °S      S    ‘q©S   0   ¬S   Øÿÿÿ*s°S     °S     ¬T   Øÿÿÿ*s¬T      t© T      U    q© U     „ q"".f4 â W   ‘q(Ex       ur X      u X    ‘q)¬X      ¬X   Øÿÿÿ*s¬Y   “q +x„ runtime.iface ©Y      ¬Y   ‘,t-¬Y   ¬Y   •   ,t-¬Y       Y    ‘.q/©Y      ¬Y   Ž„ s"".autotmp_0019 ¬Y   Èÿÿÿs¬Y      Ž¬Y   Ðÿÿÿs¬Y   “q x¬Y   •   1t& Y      ‘uT Y    ‹  p„ qruntime.panicindex  Y    q¬Y   ‘™Y   u©Y      °Y     °Y     „ qruntime.assertE2T „ qtype.func(*uint8, interface { }) float  Y    ‘qY      4„ s "".autotmp_0017 Y   4üÿÿÿ s¬Y   “q x¬Y   •   1t& Y      ‘   uT Y    ˜  p Y    q¬Y   ‘™Y      u©Y      °Y     °Y      Y    ‘qY      4Y   4   Y   üÿÿÿ s4Y   4   ©Y   Èÿÿÿs¬Y      Ž¬Y   ¬Y   Ž¬Y   (   Ž Y    Y      4©Y      ¬Y   Ž¬Y   •èÿÿÿs¬Y      Ž¬Y   •ðÿÿÿs¬Z   “q xZ   4    Z    ‘q©Z      ©Z       °Z     °Z     ¬Z   “q xr Z      u   ¬Z   Øÿÿÿ*s©Z      °Z     °Z      Z    ‘q©Z   0   ¬Z   Øÿÿÿ*s°Z     °Z     ©[   ¬[   •èÿÿÿs¬[   Ž¬[   •ðÿÿÿs¬[      Ž [    ‘	q
-©[      ©[       °[     °[     ¬[   “q xr [      u   ¬[   Øÿÿÿ*s©[      °[     °[      [    ‘q©[   0   ¬[   Øÿÿÿ*s°[     °[     ¬\   Øÿÿÿ*s¬\      t© \     „ q!runtime.throwreturn  ]    !q© ]     „ q""".newCalcSkel „ q#type.func(io.ReadCloser, io.Writer, "".Calc) *rii.Skel â _   ‘"q#E@   8   u©`   ¬`   •    ,t+¬`   Ž¬`   •(   ,t+¬`      Ž„ q$type.func("".Calc) interface { }  `    ‘	q$©`      „ %rii.iface ©`       %°`     °`     „ &rii.r ©`   &„ t'"".r „ q(type.io.ReadCloser ¬`   ‘'t(¬`   Ž¬`   •   't(¬`      Ž„ )rii.w ©`      )„ t*"".w „ q+type.io.Writer ¬`   •   *t+¬`   Ž¬`   •   *t+¬`      Ž„ q,rii.NewSkel „ q-type.func(io.ReadCloser, io.Writer, interface { }) *rii.Skel  `    ‘,q-¬`   0   „ s."".cs „ q/type.*rii.Skel ¬a   •øÿÿÿ.s/„ 0rii.sk ¬a   0„ q1"".f1 „ qtype.func(interface { }, *[]interface { }) *[]interface { } ¬a   “q 1x„ rii.f ¬a      „ qrii.*SkelÂ·Add  a    q¬b   •øÿÿÿ.s/¬b   0¬b   “q x¬b       b    q¬c   •øÿÿÿ.s/¬c   0¬c   “q x¬c       c    q¬d   •øÿÿÿ.s/¬d   0¬d   “q x¬d       d    q¬e   •øÿÿÿ.s/¬e   0   t© e      f    !q© f     „ q"".InitÂ· „ qtype.func() â f   ‘qu„ q"".initdoneÂ· q f   ‘qY f      pY f      pq f   % f   uQ f      pY f      pY f      pq f   % f      uZ f      p© f     Y f      p„ qruntime.throwinit  f    ‘qY f      pq f      u‘q„ qio.InitÂ·  f    ‘q„ q	os.InitÂ·  f    ‘	q„ q
-rii.InitÂ·  f    ‘
-qq f      u‘q© f     © f     6 f   ‘q   u„ qtype._."".calcstub „ qgo.string."calcstub" - f   oqq x„ qgo.importpath."". - f   o   qq x- f   o   qq     x- f   o   qu- f   o   qu6 f   oq    u„ qtype."".calcstub „ qtype.*runtime.StructType - f   oqq x- f   o   qq    x- f   o   q   u- f   o   qEXSÍ™    u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ qgo.string."riisample.calcstub" - f   o    qq x- f   o(   qq x- f   o0   qq @   x- f   o8   q   u- f   o<   q   u„ qgo.string."s" - f   o@   qq x- f   oH   qq x„ qtype.*rii.Stub - f   oP   qq x- f   oX   qu- f   o`   qu6 f   oqh   u„ qtype.func(*"".calcstub, float, float) (float, os.Error) „ qtype.*runtime.FuncType - f   oqq x- f   o   qq    x- f   o   q   u- f   o   qÞD:u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ qgo.string."func(*riisample.calcstub, float, float) (float, os.Error)" - f   o    qq x- f   o(   qu- f   o0   qu- f   o8   qq X   x- f   o@   q   u- f   oD   q   u- f   oH   qq p   x- f   oP   q   u- f   oT   q   u„ qtype.*"".calcstub - f   oX   qq x„ qtype.float - f   o`   qq x- f   oh   qq x- f   op   qq x„ qtype.os.Error - f   ox   qq x6 f   o
-q€   u„ qtype._.*"".calcstub - f   oqu- f   o   qu- f   o   qq     x- f   o   q   u- f   o   q   u„ qgo.string."add" - f   o    qq x- f   o(   qu„ qtype.func(float, float) (float, os.Error) - f   oqq x- f   o   qq    x- f   o   q   u- f   o   qE%À	¹    u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ qgo.string."func(float, float) (float, os.Error)" - f   o    qq x- f   o(   qu- f   o0   qu- f   o8   qq X   x- f   o@   q   u- f   oD   q   u- f   oH   qq h   x- f   oP   q   u- f   oT   q   u- f   oX   qq x- f   o`   qq x- f   oh   qq x- f   op   qq x6 f   o
-qx   u- f   o0   qq x- f   o8   qq x„ q"".*calcstubÂ·add - f   o@   qq x- f   oH   qq x„ qgo.string."divide" - f   oP   qq x- f   oX   qu- f   o`   qq x- f   oh   qq x„ q"".*calcstubÂ·divide - f   op   qq x- f   ox   qq x„ q go.string."multiply" - f   o€   qq  x- f   oˆ   qu- f   o   qq x- f   o˜   qq x„ q!"".*calcstubÂ·multiply - f   o    qq !x- f   o¨   qq !x„ q"go.string."subtract" - f   o°   qq "x- f   o¸   qu- f   oÀ   qq x- f   oÈ   qq x„ q#"".*calcstubÂ·subtract - f   oÐ   qq #x- f   oØ   qq #x6 f   oqà   u„ q$type.*runtime.PtrType - f   oqq $x- f   o   qq    x- f   o   q   u- f   o   qºŠ)u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ q%go.string."*riisample.calcstub" - f   o    qq %x- f   o(   qq x- f   o0   qq x6 f   oq8   u„ q&type.method(cs *"".calcstub)func(float, float) (float, os.Error) - f   o&qq x- f   o   &qq    &x- f   o   &q   u- f   o   &qE%À	¹    u- f   o   &q   u- f   o   &q   u- f   o   &q   u- f   o   &q   u„ q'go.string."method(cs *riisample.calcstub)func(float, float) (float, os.Error)" - f   o    &qq 'x- f   o(   &qu- f   o0   &qu- f   o8   &qq X   &x- f   o@   &q   u- f   oD   &q   u- f   oH   &qq p   &x- f   oP   &q   u- f   oT   &q   u- f   oX   &qq x- f   o`   &qq x- f   oh   &qq x- f   op   &qq x- f   ox   &qq x6 f   o
-&q€   u„ q(type.interface { } „ q)type.*runtime.InterfaceType - f   o(qq )x- f   o   (qq    (x- f   o   (q   u- f   o   (qEô¤Bó    u- f   o   (q   u- f   o   (q   u- f   o   (q   u- f   o   (q   u„ q*go.string."interface { }" - f   o    (qq *x- f   o(   (qu- f   o0   (qq @   (x- f   o8   (qu- f   o<   (qu6 f   o
-(q@   u„ q+type.[2]interface { } „ q,type.*runtime.ArrayType - f   o+qq ,x- f   o   +qq    +x- f   o   +q    u- f   o   +qE‚&·¯    u- f   o   +q   u- f   o   +q   u- f   o   +q   u- f   o   +q   u„ q-go.string."[2]interface { }" - f   o    +qq -x- f   o(   +qu- f   o0   +qq (x- f   o8   +q   u6 f   o
-+q@   u„ q.type.*[2]interface { } - f   o.qq $x- f   o   .qq    .x- f   o   .q   u- f   o   .q_¨Qu- f   o   .q   u- f   o   .q   u- f   o   .q   u- f   o   .q   u„ q/go.string."*[2]interface { }" - f   o    .qq /x- f   o(   .qu- f   o0   .qq +x6 f   o
-.q8   u„ q0type.func(int32) *[2]interface { } - f   o0qq x- f   o   0qq    0x- f   o   0q   u- f   o   0qEÝÕŽ‘    u- f   o   0q   u- f   o   0q   u- f   o   0q   u- f   o   0q   u„ q1go.string."func(int32) *[2]interface { }" - f   o    0qq 1x- f   o(   0qu- f   o0   0qu- f   o8   0qq X   0x- f   o@   0q   u- f   oD   0q   u- f   oH   0qq `   0x- f   oP   0q   u- f   oT   0q   u„ qtype.int32 - f   oX   0qq x- f   o`   0qq .x6 f   o
-0qh   u„ qtype.func(*uint8, float) interface { } - f   oqq x- f   o   qq    x- f   o   q   u- f   o   q¡=u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ qgo.string."func(*uint8, float) interface { }" - f   o    qq x- f   o(   qu- f   o0   qu- f   o8   qq X   x- f   o@   q   u- f   oD   q   u- f   oH   qq h   x- f   oP   q   u- f   oT   q   u„ qtype.*uint8 - f   oX   qq x- f   o`   qq x- f   oh   qq (x6 f   o
-qp   u„ qtype.[]interface { } „ qtype.*runtime.SliceType - f   oqq x- f   o   qq    x- f   o   q   u- f   o   q6ûýlu- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ qgo.string."[]interface { }" - f   o    qq x- f   o(   qu- f   o0   qq (x- f   o8   qÿÿÿÿu6 f   o
-q@   u„ qtype.*[]interface { } - f   oqq $x- f   o   qq    x- f   o   q   u- f   o   qE—ŒÍå    u- f   o   q   u- f   o   q   u- f   o   q   u- f   o   q   u„ q	go.string."*[]interface { }" - f   o    qq 	x- f   o(   qu- f   o0   qq x6 f   o
-q8   u„ q
-type.func(*uint8, interface { }) float - f   o
-qq x- f   o   
-qq    
-x- f   o   
-q   u- f   o   
-qE8ßf¦    u- f   o   
-q   u- f   o   
-q   u- f   o   
-q   u- f   o   
-q   u„ qgo.string."func(*uint8, interface { }) float" - f   o    
-qq x- f   o(   
-qu- f   o0   
-qu- f   o8   
-qq X   
-x- f   o@   
-q   u- f   oD   
-q   u- f   oH   
-qq h   
-x- f   oP   
-q   u- f   oT   
-q   u- f   oX   
-qq x- f   o`   
-qq (x- f   oh   
-qq x6 f   o
-
-qp   uˆ       „ q"".CalcÂ·add „ qtype.func("".Calc, float, float) (float, os.Error) â    ‘qE(   0   u„ t"".op1    •   t4„ "".op1    4   „ t"".op2    •   t4„ "".op2    4   „ t""..this „ qtype."".Calc ©   ‘t¬      ‘¬   ¬   ‘¬       ‘     ©      „ t""..args ©      t°     °     °     ©      „ qruntime.throwreturn      q©      „ q"".CalcÂ·divide â    ‘qE(   0   u„ t"".op1 „ qtype.float    •   t4„ "".op1    4   „ t"".op2    •   t4„ "".op2    4   ©   ‘t¬      ‘¬   ¬   ‘¬   (   ‘     ©      ©      t°     °     °     ©           q©      „ q"".CalcÂ·multiply â    ‘qE(   0   u„ t"".op1    •   t4„ "".op1    4   „ t"".op2    •   t4„  "".op2    4    ©   ‘t¬      ‘¬   ¬   ‘¬   0   ‘     ©      ©      t°     °     °     ©           q©      „ q!"".CalcÂ·subtract â    ‘!qE(   0   u„ t""".op1    •   "t4„ #"".op1    4   #„ t$"".op2    •   $t4„ %"".op2    4   %©   ‘t¬      ‘¬   ¬   ‘¬   8   ‘     ©      ©      t°     °     °     ©           q©      „ q&type._."".Calc „ q'go.string."Calc" -    o&qq 'x„ q(go.importpath."". -    o   &qq (x-    o   &qq     &x-    o   &qu-    o   &qu6    o&q    u-    oqq )x-    o   qq    x-    o   q   u-    o   qWSau-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ q)go.string."riisample.Calc" -    o    qq )x-    o(   qq &x-    o0   qq @   x-    o8   q   u-    o<   q   u„ q*go.string."add" -    o@   qq *x-    oH   qq (x„ q+type.func(float, float) (float, os.Error) -    oP   qq +x„ q,go.string."divide" -    oX   qq ,x-    o`   qq (x-    oh   qq +x„ q-go.string."multiply" -    op   qq -x-    ox   qq (x-    o€   qq +x„ q.go.string."subtract" -    oˆ   qq .x-    o   qq (x-    o˜   qq +x6    oq    u„ q/type.*"".Calc „ q0type.*runtime.PtrType -    o/qq 0x-    o   /qq    /x-    o   /q   u-    o   /q.SpXu-    o   /q   u-    o   /q   u-    o   /q   u-    o   /q   u„ q1go.string."*riisample.Calc" -    o    /qq 1x-    o(   /qu-    o0   /qq x6    o/q8   u„ qtype.func(interface { }, *[]interface { }) *[]interface { } „ qtype.*runtime.FuncType -    oqq x-    o   qq    x-    o   q   u-    o   qju-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(interface { }, *[]interface { }) *[]interface { }" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq h   x-    oP   q   u-    oT   q   u„ qtype.interface { } -    oX   qq x-    o`   qq x-    oh   qq x6    o
-qp   u„ qtype.func(int32) *[]interface { } -    oqq x-    o   qq    x-    o   q   u-    o   qEÑÞV¬    u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(int32) *[]interface { }" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq `   x-    oP   q   u-    oT   q   u„ qtype.int32 -    oX   qq x-    o`   qq x6    o
-qh   u„ qtype.func(*uint8, interface { }) "".Calc -    oqq x-    o   qq    x-    o   q   u-    o   q  u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ q	go.string."func(*uint8, interface { }) riisample.Calc" -    o    qq 	x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq h   x-    oP   q   u-    oT   q   u„ q
-type.*uint8 -    oX   qq 
-x-    o`   qq x-    oh   qq x6    o
-qp   u„ qtype.func(*uint8, int, []interface { }, interface { }) []interface { } -    oqq x-    o   qq    x-    o   q   u-    o   qEÌƒ'Þ    u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(*uint8, int, []interface { }, interface { }) []interface { }" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq x   x-    oP   q   u-    oT   q   u-    oX   qq 
-x„ qtype.int -    o`   qq x„ qtype.[]interface { } -    oh   qq x-    op   qq x-    ox   qq x6    o
-q€   u„ qtype.func(os.Error) interface { } -    oqq x-    o   qq    x-    o   q   u-    o   q%äu-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(os.Error) interface { }" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq `   x-    oP   q   u-    oT   q   u„ qtype.os.Error -    oX   qq x-    o`   qq x6    o
-qh   u„ qtype.func(io.ReadCloser, io.Writer, "".Calc) *rii.Skel -    oqq x-    o   qq    x-    o   q   u-    o   qŠäu-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(io.ReadCloser, io.Writer, riisample.Calc) *rii.Skel" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq p   x-    oP   q   u-    oT   q   u„ qtype.io.ReadCloser -    oX   qq x„ qtype.io.Writer -    o`   qq x„ qtype."".Calc -    oh   qq x„ qtype.*rii.Skel -    op   qq x6    o
-qx   u„ qtype.func("".Calc) interface { } -    oqq x-    o   qq    x-    o   q   u-    o   qEÊûÛ    u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(riisample.Calc) interface { }" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq `   x-    oP   q   u-    oT   q   u-    oX   qq x-    o`   qq x6    o
-qh   u„ qtype.func(io.ReadCloser, io.Writer, interface { }) *rii.Skel -    oqq x-    o   qq    x-    o   q   u-    o   qEX”™Ê    u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(io.ReadCloser, io.Writer, interface { }) *rii.Skel" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq p   x-    oP   q   u-    oT   q   u-    oX   qq x-    o`   qq x-    oh   qq x-    op   qq x6    o
-qx   u„ qtype.func() -    oqq x-    o   qq    x-    o   q   u-    o   qEö¼‚ö    u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func()" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   qu-    oD   qu-    oH   qq X   x-    oP   qu-    oT   qu6    o
-qX   u„ qtype.func("".Calc, float, float) (float, os.Error) -    oqq x-    o   qq    x-    o   q   u-    o   q75¿_u-    o   q   u-    o   q   u-    o   q   u-    o   q   u„ qgo.string."func(riisample.Calc, float, float) (float, os.Error)" -    o    qq x-    o(   qu-    o0   qu-    o8   qq X   x-    o@   q   u-    oD   q   u-    oH   qq p   x-    oP   q   u-    oT   q   u-    oX   qq x„ q type.float -    o`   qq  x-    oh   qq  x-    op   qq  x-    ox   qq x6    o
-q€   u„ q!go.importpath.runtime. „ q"string."runtime" -    o!qq "x-    o   !q   u6    o
-!q   u„ q#go.importpath.rii. „ q$string."rii" -    o#qq $x-    o   #q   u6    o
-#q   u„ q%go.importpath.io. „ q&string."io" -    o%qq &x-    o   %q   u6    o
-%q   u„ q'go.importpath.os. „ q(string."os" -    o'qq (x-    o   'q   u6    o
-'q   u„ q)string."calcstub" - f   o)q calcstub- f   o   )q         6 f   o
-)q	   u„ q*go.string."calcstub" - f   o*qq )x- f   o   *q   u6 f   o
-*q   u„ q+string."riisample.calcstub" - f   o+q riisampl- f   o   +q e.calcst- f   o   +q ub      6 f   o
-+q   u„ q,go.string."riisample.calcstub" - f   o,qq +x- f   o   ,q   u6 f   o
-,q   u„ q-string."s" - f   o-q s       6 f   o
--q   u„ q.go.string."s" - f   o.qq -x- f   o   .q   u6 f   o
-.q   u„ q/string."func(*riisample.calcstub, float, float) (float, os.Error)" - f   o/q func(*ri- f   o   /q isample.- f   o   /q calcstub- f   o   /q , float,- f   o    /q  float) - f   o(   /q (float, - f   o0   /q os.Error- f   o8   /q )       6 f   o
-/q:   u„ q0go.string."func(*riisample.calcstub, float, float) (float, os.Error)" - f   o0qq /x- f   o   0q9   u6 f   o
-0q   u„ q1string."add" - f   o1q add     6 f   o
-1q   u„ qgo.string."add" - f   oqq 1x- f   o   q   u6 f   o
-q   u„ qstring."func(float, float) (float, os.Error)" - f   oq func(flo- f   o   q at, floa- f   o   q t) (floa- f   o   q t, os.Er- f   o    q ror)    6 f   o
-q%   u„ qgo.string."func(float, float) (float, os.Error)" - f   oqq x- f   o   q$   u6 f   o
-q   u„ qstring."divide" - f   oq divide  6 f   o
-q   u„ qgo.string."divide" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."multiply" - f   oq multiply- f   o   q         6 f   o
-q	   u„ qgo.string."multiply" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."subtract" - f   oq subtract- f   o   q         6 f   o
-q	   u„ q	go.string."subtract" - f   o	qq x- f   o   	q   u6 f   o
-	q   u„ q
-string."*riisample.calcstub" - f   o
-q *riisamp- f   o   
-q le.calcs- f   o   
-q tub     6 f   o
-
-q   u„ qgo.string."*riisample.calcstub" - f   oqq 
-x- f   o   q   u6 f   o
-q   u„ qstring."method(cs *riisample.calcstub)func(float, float) (float, os.Error)" - f   oq method(c- f   o   q s *riisa- f   o   q mple.cal- f   o   q cstub)fu- f   o    q nc(float- f   o(   q , float)- f   o0   q  (float,- f   o8   q  os.Erro- f   o@   q r)      6 f   o
-qC   u„ qgo.string."method(cs *riisample.calcstub)func(float, float) (float, os.Error)" - f   oqq x- f   o   qB   u6 f   o
-q   u„ qstring."interface { }" - f   oq interfac- f   o   q e { }   6 f   o
-q   u„ qgo.string."interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."[2]interface { }" - f   oq [2]inter- f   o   q face { }- f   o   q         6 f   o
-q   u„ qgo.string."[2]interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."*[2]interface { }" - f   oq *[2]inte- f   o   q rface { - f   o   q }       6 f   o
-q   u„ qgo.string."*[2]interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."func(int32) *[2]interface { }" - f   oq func(int- f   o   q 32) *[2]- f   o   q interfac- f   o   q e { }   6 f   o
-q   u„ qgo.string."func(int32) *[2]interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."func(*uint8, float) interface { }" - f   oq func(*ui- f   o   q nt8, flo- f   o   q at) inte- f   o   q rface { - f   o    q }       6 f   o
-q"   u„ qgo.string."func(*uint8, float) interface { }" - f   oqq x- f   o   q!   u6 f   o
-q   u„ qstring."[]interface { }" - f   oq []interf- f   o   q ace { } 6 f   o
-q   u„ qgo.string."[]interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."*[]interface { }" - f   oq *[]inter- f   o   q face { }- f   o   q         6 f   o
-q   u„ qgo.string."*[]interface { }" - f   oqq x- f   o   q   u6 f   o
-q   u„ qstring."func(*uint8, interface { }) float" - f   oq func(*ui- f   o   q nt8, int- f   o   q erface {- f   o   q  }) floa- f   o    q t       6 f   o
-q"   u„ qgo.string."func(*uint8, interface { }) float" - f   oqq x- f   o   q!   u6 f   o
-q   u„ qstring."Calc" -    oq Calc    6    o
-q   u„ qgo.string."Calc" -    oqq x-    o   q   u6    o
-q   u„ q string."riisample.Calc" -    o q riisampl-    o    q e.Calc  6    o
- q   u„ q!go.string."riisample.Calc" -    o!qq  x-    o   !q   u6    o
-!q   u„ q"string."*riisample.Calc" -    o"q *riisamp-    o   "q le.Calc 6    o
-"q   u„ q#go.string."*riisample.Calc" -    o#qq "x-    o   #q   u6    o
-#q   u„ q$string."func(interface { }, *[]interface { }) *[]interface { }" -    o$q func(int-    o   $q erface {-    o   $q  }, *[]i-    o   $q nterface-    o    $q  { }) *[-    o(   $q ]interfa-    o0   $q ce { }  6    o
-$q7   u„ q%go.string."func(interface { }, *[]interface { }) *[]interface { }" -    o%qq $x-    o   %q6   u6    o
-%q   u„ q&string."func(int32) *[]interface { }" -    o&q func(int-    o   &q 32) *[]i-    o   &q nterface-    o   &q  { }    6    o
-&q   u„ q'go.string."func(int32) *[]interface { }" -    o'qq &x-    o   'q   u6    o
-'q   u„ q(string."func(*uint8, interface { }) riisample.Calc" -    o(q func(*ui-    o   (q nt8, int-    o   (q erface {-    o   (q  }) riis-    o    (q ample.Ca-    o(   (q lc      6    o
-(q+   u„ q)go.string."func(*uint8, interface { }) riisample.Calc" -    o)qq (x-    o   )q*   u6    o
-)q   u„ q*string."func(*uint8, int, []interface { }, interface { }) []interface { }" -    o*q func(*ui-    o   *q nt8, int-    o   *q , []inte-    o   *q rface { -    o    *q }, inter-    o(   *q face { }-    o0   *q ) []inte-    o8   *q rface { -    o@   *q }       6    o
-*qB   u„ q+go.string."func(*uint8, int, []interface { }, interface { }) []interface { }" -    o+qq *x-    o   +qA   u6    o
-+q   u„ q,string."func(os.Error) interface { }" -    o,q func(os.-    o   ,q Error) i-    o   ,q nterface-    o   ,q  { }    6    o
-,q   u„ q-go.string."func(os.Error) interface { }" -    o-qq ,x-    o   -q   u6    o
--q   u„ q.string."func(io.ReadCloser, io.Writer, riisample.Calc) *rii.Skel" -    o.q func(io.-    o   .q ReadClos-    o   .q er, io.W-    o   .q riter, r-    o    .q iisample-    o(   .q .Calc) *-    o0   .q rii.Skel-    o8   .q         6    o
-.q9   u„ q/go.string."func(io.ReadCloser, io.Writer, riisample.Calc) *rii.Skel" -    o/qq .x-    o   /q8   u6    o
-/q   u„ q0string."func(riisample.Calc) interface { }" -    o0q func(rii-    o   0q sample.C-    o   0q alc) int-    o   0q erface {-    o    0q  }      6    o
-0q#   u„ q1go.string."func(riisample.Calc) interface { }" -    o1qq 0x-    o   1q"   u6    o
-1q   u„ qstring."func(io.ReadCloser, io.Writer, interface { }) *rii.Skel" -    oq func(io.-    o   q ReadClos-    o   q er, io.W-    o   q riter, i-    o    q nterface-    o(   q  { }) *r-    o0   q ii.Skel 6    o
-q8   u„ qgo.string."func(io.ReadCloser, io.Writer, interface { }) *rii.Skel" -    oqq x-    o   q7   u6    o
-q   u„ qstring."func()" -    oq func()  6    o
-q   u„ qgo.string."func()" -    oqq x-    o   q   u6    o
-q   u„ qstring."func(riisample.Calc, float, float) (float, os.Error)" -    oq func(rii-    o   q sample.C-    o   q alc, flo-    o   q at, floa-    o    q t) (floa-    o(   q t, os.Er-    o0   q ror)    6    o
-q5   u„ qgo.string."func(riisample.Calc, float, float) (float, os.Error)" -    oqq x-    o   q4   u6    o
-q   u„ qstring."runtime" -    oq runtime 6    o
-q   u„ qstring."rii" -    oq rii     6    o
-q   u„ q	string."io" -    o	q io      6    o
-	q   u„ q
-string."os" -    o
-q os      6    o
-
-q   uO      

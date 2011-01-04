@@ -125,3 +125,26 @@ func (sc *simplecalc) divide(op1 float, op2 float) (float, os.Error) {
 	return sc.r,nil
 }
 
+
+type stringreader struct {
+	s string
+	pos int
+}
+
+func (r *stringreader) Read(b []byte) (int,os.Error) {
+	slen:=len(r.s)
+	if(r.pos>=slen) {
+		return 0,os.EOF
+	}
+	n:=slen-r.pos
+	blen:=len(b)
+	if(n>blen) {
+		n=blen
+	}
+	for i:=0;i<n;i++ {
+		b[i]=r.s[r.pos+i]
+	}
+	r.pos+=n
+	return n,nil
+}
+

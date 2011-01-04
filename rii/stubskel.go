@@ -85,7 +85,7 @@ func NewStub(r io.ReadCloser, w io.Writer) *Stub {
 }
 
 // invocation function to start the remote invocation and receive the result
-// The invocation is sent throug a channel to the stubSender() and the reply
+// The invocation is sent through a channel to the stubSender() and the reply
 // is received from a channel from the stubReceiver() 
 func (st *Stub) Invoke(fn int, args ...interface{}) (*[]interface{},os.Error) {
 	rch := make(chan *response) // reply channel
@@ -258,5 +258,84 @@ func skelReplier(sk *Skel) {
 	}
 	log("skelReplier closed")
 	sk.quit <- 1
+}
+
+// Simple Synchronous Stub
+type SimpleStub struct {
+	r		io.ReadCloser			// The conn. or pipe to read gobs from
+	w		io.Writer				// The conn. or pipe to write gobs to
+	e       *gob.Encoder			// Encoder to send gobs to the skel
+	d       *gob.Decoder			// Decoder to receive gobs from the skel
+}
+
+// simpleinvocation with a func number and the call arguments
+type simpleinvocation struct {
+	fn int
+	args *[]interface{}
+}
+
+// simpleresponse with the results and/or error
+type simpleresponse struct {
+	results *[]interface{}
+	err os.Error
+}
+
+// invocation function to start the remote invocation and receive the result
+// The invocation is sent gob-encoded to the skel and waits for the results 
+func (sst *SimpleStub) Invoke(fn int, args ...interface{}) (*[]interface{},os.Error) {
+	si:=&simpleinvocation{fn, &args} //invocation
+	err:=sst.e.Encode(si) // Encode=send invocation
+	//log("stub sent",si)
+	if err != nil {		
+		log("stub got encoding error:",err)
+		return nil, err // send/encode error
+	}
+	var srsp simpleresponse
+	err = sst.d.Decode(&srsp)
+	//log("stub got ",ssrsp)
+	if err != nil {
+		log("stub got decoding error:",err)
+		return nil, err // send/encode error
+	}
+	return srsp.results,srsp.err
+}
+
+// Simple Synchronous Skel base type (server side)
+type SimpleSkel struct {
+	r		io.ReadCloser			// The conn. or pipe to read gobs from
+	w		io.Writer				// The conn. or pipe to write gobs to
+	e		*gob.Encoder			// Gobs encoder
+	d		*gob.Decoder			// gobs decoder
+	alive	bool					// 'Is the skel alive' flag					
+	iface	interface{}				// Interface exported by this Skel(etor)	
+	funcs	[]ExportedFunc			// array of exported functions
+}
+
+// skel invocation receiver gets invocation gobs and launches a goroutine to
+// execute them. The reply will go back via channel's msg to the skelReplier()
+func (ssk* SimpleSkel) Serve() {
+	for ssk.alive {
+		var si simpleinvocation
+		var srsp *simpleresponse
+		err := ssk.d.Decode(&si)
+		if err == os.EOF { // EOF?
+			if(ssk.alive) { // got quit signal by closing the reader
+				log("skel remotely stopped!")
+				ssk.alive = false // remote quit
+			}
+			continue // quit
+		}
+		if err == nil {
+			//log("skelReceiver gets ",i)
+			srsp=&simpleresponse{ssk.funcs[si.fn-1](ssk.iface,si.args),nil}
+		} else { // report error back
+			srsp=&simpleresponse{nil,err}
+		}
+		err=ssk.e.Encode(srsp)
+		if(err!=nil) {
+			ssk.e.Encode(simpleresponse{nil,err})
+		}
+	}
+	log("skel closed")
 }
 

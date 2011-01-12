@@ -1,6 +1,5 @@
 // Copyright 2011 Jose Luis Vázquez González josvazg@gmail.com
 // Use of this source code is governed by a BSD-style
-
 package rii
 
 import (
@@ -14,14 +13,6 @@ import (
 const (
 	quit = -1
 )
-
-// Invoker interface to satify by any rii like remotizing transport
-//
-// Invoke() function will call the function number (fn) with arguments (args) 
-// and get their results (r) or an error (e)
-type Invoker interface {
-	Invoke(fn int, args ...interface{}) (r *[]interface{}, e os.Error)
-}
 
 // invocation message 
 type invocation struct {

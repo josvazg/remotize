@@ -37,7 +37,7 @@ func f4(calc interface{}, args *[]interface{}) *[]interface{} {
 	return &rs
 }
 
-func newCalcSkel(r io.ReadCloser, w io.Writer, calc Calc) *rii.Skel {
+func newCalcClient(r io.ReadCloser, w io.Writer, calc Calc) *rii.Client {
 	cs:=rii.NewSkel(r,w,calc)
 	cs.Add(f1)
 	cs.Add(f2)

@@ -8,7 +8,7 @@ import (
 
 func runServer() {
 	gobSync(os.Stdin,os.Stdout)
-	cs:=newCalcSkel(os.Stdin,os.Stdout,&simplecalc{0})
+	cs:=newCalcServer(os.Stdin,os.Stdout,&simplecalc{0})
 	cs.Serve()
 	fmt.Fprintln(os.Stderr,"Server done")	
 }

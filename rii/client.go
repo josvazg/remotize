@@ -83,5 +83,3 @@ func (p *pipeInvoker) Invoke(fn int,
 	return rsp.results,rsp.error
 }
 
-
-

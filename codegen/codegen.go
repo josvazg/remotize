@@ -1,61 +1,53 @@
 package codegen
 
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+)
+
 type GoFile struct {
+	astFile		*ast.File
 	filename	string
-	packname	string
-	imports		[]importSpec
-	constants	[]constantSpec
-	variables	[]varSpec
-	funcs		[]funcSpec
-	types		[]typeSpec
-	methods		[]methodSpec
+	header		string
 }
 
-type importSpec struct {
-	name, alias string
+func NewGoFile(name, pack string) *GoFile {
+	code:="package "+pack+"\n\n"
+	n,e:=parse(nil,code)
+	if(e!=nil) {
+		panic(e)
+	}
+	gofile:=&GoFile{n,name,code}
+	return gofile
 }
 
-type constantSpec struct {
-	isenum 		bool
-	name 		string
-	value		interface{}
-	names		[]string
-	values		[]interface{}
+func (gf *GoFile) AddImport(name string) os.Error {
+	return gf.parse("import \""+name+"\"\n")
 }
 
-type varSpec struct {
-	name 	string
-	value	[]interface{}
+func (gf *GoFile) AddAliasedImport(name, alias string) os.Error {
+	return gf.parse("import "+alias+" \""+name+"\"\n")
 }
 
-type funcSpec struct {
-	name 		string
-	argsNames	[]string
-	args		[]interface{}
-	resultNames	[]string
-	code		[]codeElement
+func (gf *GoFile) AddFunc(funcDecl string) os.Error {
+	return gf.parse(funcDecl)
 }
 
-type codeElement struct {
+func parse(f *GoFile, code string) (*ast.File,os.Error) {
+	if(f!=nil) {
+		code=f.header+code;
+	}
+	fset:=token.NewFileSet()
+	return parser.ParseFile(fset,"",code,0)
 }
 
-type typeSpec struct {
-	name string
+func (gf *GoFile) parse(code string) os.Error {
+	n,e:=parse(gf,code)
+	if(e!=nil) {
+		return e
+	}
+	gf.astFile.Decls=append(gf.astFile.Decls,n.Decls...)
+	return nil
 }
-
-type methodSpec struct {
-	name string
-}
-
-func NewGoFile(name, pack string) (*GoFile) {
-	return &GoFile{filename:name,packname:pack}
-}
-
-func (gf *GoFile) AddImport(name string) {
-	gf.imports=append(gf.imports,importSpec{name,""})
-}
-
-func (gf *GoFile) AddAliasedImport(name, alias string) {
-	gf.imports=append(gf.imports,importSpec{name,alias})
-}
-

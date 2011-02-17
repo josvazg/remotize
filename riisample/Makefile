@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=rii
-GOFILES=stubskel.go remotize.go client.go
+TARG=riisample
+GOFILES=calcstub.go calcskel.go common.go
 
 include $(GOROOT)/src/Make.pkg

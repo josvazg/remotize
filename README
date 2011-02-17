@@ -1,7 +1,7 @@
 INTRODUCTION
 ____________
 
-Goloader are a set of packages that allow programmers in Google's go language to load objects dynamicaly.
+Goloader are a set of packages that allow programmers in Google's Go language to load objects dynamicaly and/or use them remotely.
 
 As of this moment (December 2010) Go language does NOT allow for shared libraries nor dynamic loading due to desing reasons. Basically to ensure that DLL Hell and Shared Object Linking problems and complications don't make go compilers/linkers slow an complicated and also go programs don't get slow to be loaded and also bloated with all the linking extra information.
 

@@ -51,3 +51,4 @@ func (gf *GoFile) parse(code string) os.Error {
 	gf.astFile.Decls=append(gf.astFile.Decls,n.Decls...)
 	return nil
 }
+

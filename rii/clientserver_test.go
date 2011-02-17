@@ -15,7 +15,7 @@ type Calc interface {
 	Divide(op1 float64, op2 float64) (float64, os.Error)
 }
 
-// The implementation
+// The type implementing it
 type simplecalc struct {
 	r float64
 }
@@ -43,93 +43,83 @@ func (sc *simplecalc) Divide(op1 float64, op2 float64) (float64, os.Error) {
 	return sc.r,nil
 }
 
+// The server reference-wrapping type
 type CalcServer struct {
-	s *Server
+	i simplecalc
 }
 
 // The Server wiring
-func (s *CalcServer) Add(a []interface{},r *[]interface{}) os.Error {
+func (s *CalcServer) Add(a *[]interface{},r *[]interface{}) os.Error {
 	res:=make([]interface{},2)
-	i:=s.s.Iface.(Calc)
-	res[0]=i.Add((a[0]).(float64),(a[1]).(float64))
+	res[0]=s.i.Add(((*a)[0]).(float64),((*a)[1]).(float64))
 	res[1]=nil
 	r=&res
 	return nil
 }
 
-func (s *CalcServer) Subtract(a []interface{}, r *[]interface{}) os.Error {
+func (s *CalcServer) Subtract(a *[]interface{}, r *[]interface{}) os.Error {
 	res:=make([]interface{},2)
-	i:=s.s.Iface.(Calc)
-	res[0]=i.Subtract((a[0]).(float64),(a[1]).(float64))
+	res[0]=s.i.Subtract(((*a)[0]).(float64),((*a)[1]).(float64))
 	res[1]=nil
 	r=&res
 	return nil
 }
 
-func (s *CalcServer) Multiply(a []interface{}, r *[]interface{}) os.Error {
+func (s *CalcServer) Multiply(a *[]interface{}, r *[]interface{}) os.Error {
 	res:=make([]interface{},2)
-	i:=s.s.Iface.(Calc)
-	res[0]=i.Multiply((a[0]).(float64),(a[1]).(float64))
+	res[0]=s.i.Multiply(((*a)[0]).(float64),((*a)[1]).(float64))
 	res[1]=nil
 	r=&res
 	return nil
 }
 
-func (s *CalcServer) Divide(a []interface{}, r *[]interface{}) os.Error {
+func (s *CalcServer) Divide(a *[]interface{}, r *[]interface{}) os.Error {
 	res:=make([]interface{},2)
-	i:=s.s.Iface.(Calc)
-	res[0],res[1]=i.Divide((a[0]).(float64),(a[1]).(float64))
+	res[0],res[1]=s.i.Divide(((*a)[0]).(float64),((*a)[1]).(float64))
 	r=&res
 	return (res[1]).(os.Error)
 }
 
-// The Client wiring
+// The Client reference wiring
 type calcClient struct {
 	c	*Client
 }
 
-func (cc *calcClient) add(op1 float64, op2 float64) float64 {
-	r,e:=cc.c.Call("Calc.Add",false,op1,op2)
+func (cc *calcClient) Add(op1 float64, op2 float64) float64 {
+	r,e:=cc.c.Call("Calc.Add",op1,op2)
 	if(e!=nil) {
-		cc.c.HandleError("add",e)
-	}	
-	return
+		cc.c.HandleError("Calc.Add",e)
+	}
+	return ((*r)[0]).(float64)
 }
 
-func (cc *calcClient) subtract(op1 float64, op2 float64) float64 {
-	r,e:=c.riic.Call("Calc.subtract",false,op1,op2)	
-	if(r!=nil && len(r)>0) {
-		res=(r[0]).(float)
-	}	
-	return
+func (cc *calcClient) Subtract(op1 float64, op2 float64) float64 {
+	r,e:=cc.c.Call("Calc.Subtract",op1,op2)	
+	if(e!=nil) {
+		cc.c.HandleError("Calc.Substract",e)
+	}
+	return (*r)[0].(float64)
 }
 
-func (cc *calcClient) multiply(op1 float64, op2 float64) float64 {
-	r,e:=c.riic.Call("Calc.Multiply",false,op1,op2)
-	if(r!=nil && len(r)>0) {
-		res=(r[0]).(float64)
-	}	
-	return
+func (cc *calcClient) Multiply(op1 float64, op2 float64) float64 {
+	r,e:=cc.c.Call("Calc.Multiply",op1,op2)
+	if(e!=nil) {
+		cc.c.HandleError("Calc.Substract",e)
+	}
+	return (*r)[0].(float64)
 }
 
-func (cc *calcClient) divide(op1 float64, op2 float64) (float64, os.Error) {
-	r,e:=c.riic.Call("Calc.Divide",true,op1,op2)	
-	if(r!=nil && len(r)>0) {
-		res=(r[0]).(float64)
-	}	
-	return
+func (cc *calcClient) Divide(op1 float64, op2 float64) (float64, os.Error) {
+	r,e:=cc.c.Call("Calc.Divide",op1,op2)
+	return (*r)[0].(float64),e
 }
 
 func TestClientServerLocal(t *testing.T) {
-	s:=NewServer(&simplecalc{0})
+	s:=NewServer(&simplecalc{0},new(CalcServer))
 	r1,w1:=io.Pipe()
 	r2,w2:=io.Pipe()
-	s.Add(doAdd)
-	s.Add(doSubtract)
-	s.Add(doMultiply)
-	s.Add(doDivide)
 	s.ServePipe(IO(r2,w1))
 	c:=NewClient(IO(r1,w2))
 	cc:=&calcClient{c}
-	
+	cc.Add(1,2)
 }

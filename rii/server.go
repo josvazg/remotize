@@ -3,26 +3,23 @@
 package rii
 
 import (
-	"os"
 	"io"
 	"rpc"
 	"net"
 	"http"
 )
 
-// Exported Function type
-type FuncHandling func(interface{},[]interface{}) (*[]interface{}, os.Error)
-
 // RII Server using the rpc package as rii transport
 type Server struct {
 	server		*rpc.Server				// rpc server
 	Iface		interface{}				// iface to be invoked
+	Service		interface{}				// type implementing the service
 }
 
 // Create a new RII Server on a local io pipe
-func NewServer(iface interface{}) *Server {
-	s:=&Server{rpc.NewServer(),iface}
-	rpc.Register(s)
+func NewServer(iface interface{}, service interface{}) *Server {
+	s:=&Server{rpc.NewServer(),iface,service}
+	rpc.Register(service)
 	return s
 }
 

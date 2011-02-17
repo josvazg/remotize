@@ -21,6 +21,7 @@ func TestGobSync(t *testing.T) {
 
 func TestRiisample(t *testing.T) {
 	fmt.Println("Hi!")
+	fmt.Println("Starting Server...")
 	os.Setenv("RUN_RIISAMPLE_SERVER","RUN")
 	argv := []string{"gotest", "server_test.go"} 
 	cmdname, e := exec.LookPath(argv[0]) 
@@ -33,11 +34,12 @@ func TestRiisample(t *testing.T) {
 		t.Fatal("3 %v",err) 
   	}
 	fmt.Println("Cmd pid",cmd.Pid)
-	gobSync(cmd.Stdout,cmd.Stdin)
-	/*cs:=&calcstub{rii.NewStub(DebugReader("cmd.Stdout",cmd.Stdout,os.Stderr),
-		DebugWriter("cmd.Stdin",cmd.Stdin,os.Stderr))}*/
-	cs:=&calcstub{rii.NewStub(cmd.Stdout,cmd.Stdin)}
-	calc:=(interface{})(cs).(Calc)
+	fmt.Println("Testing Client...")
+	/*
+	cc:=&calcstub{rii.NewStub(DebugReader("cmd.Stdout",cmd.Stdout,os.Stderr),
+		DebugWriter("cmd.Stdin",cmd.Stdin,os.Stderr))}
+	*/
+	calc:=newCalcClient(rii.IO(cmd.Stdout,cmd.Stdin))
 	r,_:=calc.add(1,2.3)
 	fmt.Println("1+2.3=",r)
 	r,_=calc.subtract(1,2.3)

@@ -3,83 +3,135 @@
 package rii
 
 import (
-	"os"
+	"fmt"
 	"io"
-	"gob"
+	"os"
 	"rpc"
-	"sync"
+	"time"
 )
 
-// Invoker interface to satify by any rii-like remotizing transport
+// Caller interface to satify by any rii-like remotizing transport
 //
-// Invoke() function will call the function number (fn) with arguments (args) 
+// Call() function will call the function number (fn) with arguments (args) 
 // and get their results (r) or an error (e)
-type Invoker interface {
-	Invoke(fn int, args ...interface{}) ([]interface{}, os.Error)
+type Caller interface {
+	Call(string, bool, ...interface{}) ([]interface{}, os.Error)
 }
 
-// Invoker using the rpc package as rii transport
-type rpcInvoker struct {
-	client		*rpc.Client
-	funcNames	[]string
+// Error handler interface
+type ErrorHandling func(string, os.Error)
+
+// RIIClient using the rpc package as rii transport
+type Client struct {
+	client		*rpc.Client		// rpc transport
+	handler		ErrorHandling	// default error handler
+	timeout		*int			// default rpc max timeout
 }
 
-// Invoker using a local pipe to a local process as rii transport
-type pipeInvoker struct {
-	pipe		io.ReadWriteCloser		// Data Transport Pipe
-	e       	*gob.Encoder			// Encoder to send gobs to the skel
-	d       	*gob.Decoder			// Decoder to receive gobs from the skel
-	mutex		sync.Mutex				// Mutex for sharing the pipe transport
+// UNSET_TIMEOUT
+const NoTimeout=0
+
+// Rii default error handling routine for all remote interfaces
+var DefaultErrorHandling	ErrorHandling
+
+// Rii default call timeout (0 is no timeout) for all remote interfaces
+var DefaultTimeout			int
+
+// Create a new RII Client
+func NewClient(rwc io.ReadWriteCloser) *Client {
+	return &Client{rpc.NewClient(rwc),nil,nil}
 }
 
-// Pipe Invoker call message
-type pipeCall struct {
-	fn		int
-	args	[]interface{}
-}
-
-// Pipe Invoker response message
-type pipeResponse struct {
-	results	[]interface{}
-	error	os.Error
-}
-
-// Create a new Rpc Invoker
-func NewRpcInvoker(client *rpc.Client, funcNames []string) *rpcInvoker {
-	return &rpcInvoker{client,funcNames}
-}
-
-// Create a new Pipe Invoker
-func NewPipeInvoker(pipe io.ReadWriteCloser) *pipeInvoker {		
-	return &pipeInvoker{pipe: pipe,
-		e: gob.NewEncoder(pipe),
-		d: gob.NewDecoder(pipe)}
-}
-
-// Call to a remote (rpc) method
+// RII Call to a method
 // No need to synchronize the transport here, rpc does it already
-func (r *rpcInvoker) Invoke(fn int, 
+func (c *Client) Call(funcname string, re bool, 
 		args ...interface{}) ([]interface{}, os.Error) {
 	var rsp []interface{}
-	err:=r.client.Call(r.funcNames[fn],args,rsp)
+	timeout:=c.Timeout(funcname)
+	var err os.Error
+	if(timeout==NoTimeout) {
+		err=c.client.Call(funcname,args,rsp)
+	} else {
+		rch:=make(chan *rpc.Call)
+		c.client.Go(funcname,args,rsp,rch)
+		timeoutCh := make(chan bool, 1)
+		go func() {
+		    time.Sleep(int64(timeout)*1e6)
+		    timeoutCh <- true
+		}()
+		select {
+			case call:=<-rch:
+			    rsp=(call.Reply).([]interface{})
+				err=call.Error
+			case <-timeoutCh:
+				msg:=fmt.Sprintf("Timeout %vms at %v()!",timeout,funcname)
+				err=os.NewError(msg)
+		} 
+	} 
+	if(err!=nil && !re) {
+		c.handleError(funcname,err)
+	}
 	return rsp,err
 }
 
-// Call to a local (piped) method
-func (p *pipeInvoker) Invoke(fn int, 
-		args ...interface{}) ([]interface{}, os.Error) {
-	call:=&pipeCall{fn,args}
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	err:=p.e.Encode(call)
-	if(err!=nil) {
-		return nil,err
+// Effective Timeout
+func (c *Client) Timeout(funcname string) int {
+	if(c.timeout!=nil) {
+		return *c.timeout
 	}
-	var rsp pipeResponse
-	err=p.d.Decode(&rsp)
-	if(err!=nil) {
-		return nil,err
+	return DefaultTimeout
+}
+
+// Handle an error
+func (c *Client) handleError(funcname string, e os.Error) {
+	if(c.handler!=nil) {
+		c.handler(funcname,e)
+	} else if(DefaultErrorHandling!=nil) {
+		DefaultErrorHandling(funcname,e)
+	} else {
+		errmsg:=fmt.Sprintf("Error at %v(): %v",funcname,e)
+		panic(errmsg)
 	}
-	return rsp.results,rsp.error
+}
+
+// Set remote interface error handler
+func (c *Client) ErrorHandler(f ErrorHandling) {
+	c.handler=f
+}
+
+// Set remote interface default timeout
+func (c* Client) InterfaceTimeout(timeout int) {
+	c.timeout=&timeout
+}
+
+// Pipe for local invocations, parent/child comms
+type pipe struct {
+	in io.ReadCloser
+	out io.WriteCloser
+}
+
+// Read from the pipe
+func (p *pipe) Read(b []byte) (n int, err os.Error) {
+	return p.in.Read(b)
+}
+
+// Write to the pipe
+func (p *pipe) Write(b []byte) (n int, err os.Error) {
+	return p.out.Write(b)
+}
+
+// Close pipe io
+func (p *pipe) Close() os.Error {
+	err:=p.in.Close()
+	if(err!=nil) {
+		return err
+	}
+	return p.out.Close()
+}
+
+// Prepare a ReadWriteCloser pipe from a reader and a writer
+// This can be passed to NewClient to use RPCs over local pipe streams
+func IO(in io.ReadCloser, out io.WriteCloser) *pipe {
+	return &pipe{in,out}
 }
 

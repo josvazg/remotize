@@ -5,43 +5,45 @@ import (
 	"os"
 )
 
-type calcserver struct {
-	s *rii.Server
+func newCalcServer(calc Calc) *rii.Server {
+	cs:=rii.NewServer(calc)
+	cs.Add(calc_add)
+	cs.Add(calc_substract)
+	cs.Add(calc_multiply)
+	cs.Add(calc_divide)
+	return cs
 }
 
-func (cs *calcserver) add(op1 float, op2 float) (res float, e os.Error) {
-	rp,e:=cs.s.Invoke(1,op1,op2)
-	r:=*rp
-	if(rp!=nil && len(r)>0) {
-		res=(r[0]).(float)
-	}	
-	return
+func calc_add(calc interface{}, args []interface{}, 
+		res *[]interface{}) os.Error {
+	r,e:=calc.(Calc).add((args[0]).(float),(args[1]).(float))
+	*res=append(*res,r)
+	*res=append(*res,e)
+	return nil
 }
 
-func (cs *calcserver) subtract(op1 float, op2 float) (res float, e os.Error) {
-	rp,e:=cs.s.Invoke(2,op1,op2)	
-	r:=*rp
-	if(rp!=nil && len(r)>0) {
-		res=(r[0]).(float)
-	}	
-	return
+func calc_substract(calc interface{}, args []interface{}, 
+		res *[]interface{}) os.Error {
+	r,e:=calc.(Calc).subtract((args[0]).(float),(args[1]).(float))
+	*res=append(*res,r)
+	*res=append(*res,e)
+	return nil
 }
 
-func (cs *calcserver) multiply(op1 float, op2 float) (res float, e os.Error) {
-	rp,e:=cs.s.Invoke(3,op1,op2)
-	r:=*rp
-	if(rp!=nil && len(r)>0) {
-		res=(r[0]).(float)
-	}	
-	return
+func calc_multiply(calc interface{}, args []interface{}, 
+		res *[]interface{}) os.Error {
+	r,e:=calc.(Calc).multiply((args[0]).(float),(args[1]).(float))
+	*res=append(*res,r)
+	*res=append(*res,e)
+	return nil
 }
 
-func (cs *calcserver) divide(op1 float, op2 float) (res float, e os.Error) {
-	rp,e=cs.s.Invoke(4,op1,op2)	
-	r:=*rp
-	if(rp!=nil && len(r)>0) {
-		res=(r[0]).(float)
-	}	
-	return
+func calc_divide(calc interface{}, args []interface{}, 
+		res *[]interface{}) os.Error {
+	r,e:=calc.(Calc).divide((args[0]).(float),(args[1]).(float))
+	*res=append(*res,r)
+	*res=append(*res,e)
+	return nil
 }
+
 

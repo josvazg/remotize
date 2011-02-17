@@ -2,46 +2,48 @@ package riisample
 
 import (
 	"rii"
+	"os"
 	"io"
 )
 
-func f1(calc interface{}, args *[]interface{}) *[]interface{} {
-	var rs []interface{}
-	r,e:=calc.(Calc).add(((*args)[0]).(float),((*args)[1]).(float))
-	rs=append(rs,r)
-	rs=append(rs,e)
-	return &rs
+type calcclient struct {
+	riic *rii.Client
 }
 
-func f2(calc interface{}, args *[]interface{}) *[]interface{} {
-	var rs []interface{}
-	r,e:=calc.(Calc).subtract(((*args)[0]).(float),((*args)[1]).(float))
-	rs=append(rs,r)
-	rs=append(rs,e)
-	return &rs
+func newCalcClient(rwc io.ReadWriteCloser) Calc {
+	return (interface{})(&calcclient{rii.NewClient(rwc)}).(Calc)
 }
 
-func f3(calc interface{}, args *[]interface{}) *[]interface{} {
-	var rs []interface{}
-	r,e:=calc.(Calc).multiply(((*args)[0]).(float),((*args)[1]).(float))
-	rs=append(rs,r)
-	rs=append(rs,e)
-	return &rs
+func (c *calcclient) add(op1 float, op2 float) (res float, e os.Error) {
+	r,e:=c.riic.Call(1,op1,op2)
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float)
+	}	
+	return
 }
 
-func f4(calc interface{}, args *[]interface{}) *[]interface{} {
-	var rs []interface{}
-	r,e:=calc.(Calc).divide(((*args)[0]).(float),((*args)[1]).(float))
-	rs=append(rs,r)
-	rs=append(rs,e)
-	return &rs
+func (c *calcclient) subtract(op1 float, op2 float) (res float, e os.Error) {
+	r,e:=c.riic.Call(2,op1,op2)	
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float)
+	}	
+	return
 }
 
-func newCalcClient(r io.ReadCloser, w io.Writer, calc Calc) *rii.Client {
-	cs:=rii.NewSkel(r,w,calc)
-	cs.Add(f1)
-	cs.Add(f2)
-	cs.Add(f3)
-	cs.Add(f4)
-	return cs
+func (c *calcclient) multiply(op1 float, op2 float) (res float, e os.Error) {
+	r,e:=c.riic.Call(3,op1,op2)
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float)
+	}	
+	return
 }
+
+func (c *calcclient) divide(op1 float, op2 float) (res float, e os.Error) {
+	r,e:=c.riic.Call(4,op1,op2)	
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float)
+	}	
+	return
+}
+
+

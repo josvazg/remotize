@@ -1,113 +1,135 @@
 package rii
 
 import (
-	"testing"
-	"fmt"
 	"io"
-	"time"
+	"os"
+	"strconv"
+	"testing"
 )
 
-type adder interface {
-	add(int, int) int
-	addnsleep(int, int) int
+// The interface
+type Calc interface {
+	Add(op1 float64, op2 float64) float64
+	Subtract(op1 float64, op2 float64) float64
+	Multiply(op1 float64, op2 float64) float64
+	Divide(op1 float64, op2 float64) (float64, os.Error)
 }
 
-type addertype struct {
-	i int
+// The implementation
+type simplecalc struct {
+	r float64
 }
 
-func (at* addertype) add(a int, b int) int {
-	at.i = a + b
-	return at.i
+func (sc *simplecalc) Add(op1 float64, op2 float64) float64 {
+	sc.r=op1+op2
+	return sc.r
 }
 
-func (at* addertype) addnsleep(a int, b int) int {
-	at.i = a + b
-	r := at.i
-	sleep := int64(r) * 1e7
-	fmt.Printf("Sleep=%vms\n", (sleep / 1e6))
-	time.Sleep(sleep)
-	return r
+func (sc *simplecalc) Subtract(op1 float64, op2 float64) float64 {
+	sc.r=op1-op2
+	return sc.r
 }
 
-func f1add(iface interface{}, args*[]interface{}) *[]interface{} {
-	fmt.Println("iface=",iface)
-	fmt.Println("args=",args)
-	arg1 := ((*args)[0]).(int)
-	arg2 := ((*args)[1]).(int)
-	var results []interface{} = make([]interface{}, 1)
-	results[0] = (iface).(adder).add(arg1, arg2)
-	return &results
+func (sc *simplecalc) Multiply(op1 float64, op2 float64) float64 {
+	sc.r=op1*op2
+	return sc.r
 }
 
-func f2addnsleep(iface interface{}, args*[]interface{}) *[]interface{} {
-	arg1 := ((*args)[0]).(int)
-	arg2 := ((*args)[1]).(int)
-	var results []interface{} = make([]interface{}, 1)
-	results[0] = (iface).(adder).addnsleep(arg1, arg2)
-	return &results
+func (sc *simplecalc) Divide(op1 float64, op2 float64) (float64, os.Error) {
+	if(op2==0) {
+		return 0,os.NewError("Divide "+strconv.Ftoa64(op1,'f',-1)+" by ZERO!?!")
+	}
+	sc.r=op1/op2
+	return sc.r,nil
 }
 
-func TestStubSkel(t *testing.T) {
-	r1, w1 := io.Pipe()
-	r2, w2 := io.Pipe()
-	st := NewStub(r1,w2)
-	var a addertype
-	sk := NewSkel(r2, w1, &a)
-	sk.Add(f1add)
-	sk.Add(f2addnsleep)
-	go sk.Serve()
-	fn := 1
-	arg1 := 2
-	arg2 := 7
-	fmt.Println("invoking function#", fn, " with args:", arg1, arg2)
-	res, err := st.Invoke(fn, arg1, arg2)
-	fmt.Println("TEST RESULT:(", arg1, ")+(", arg2, ")=", (*res)[0], " err:", err)
-	st.close()
-	sk.close()
+type CalcServer struct {
+	s *Server
 }
 
-func Test3Calls(t *testing.T) {
-	quit := make(chan int)
-	r1, w1 := io.Pipe()
-	r2, w2 := io.Pipe()
-	st := NewStub(r1,w2)
-	var a addertype
-	sk := NewSkel(r2,w1, &a)
-	sk.Add(f1add)
-	sk.Add(f2addnsleep)
-	go sk.Serve()
-	go func() {
-		fn := 2
-		arg1 := 2
-		arg2 := 7
-		fmt.Println("invoking function#", fn, " with args:", arg1, arg2)
-		res, err := st.Invoke(fn, arg1, arg2)
-		fmt.Println("TEST 1 RESULT:(", arg1, ")+(", arg2, ")=", (*res)[0], " err:", err)
-		quit <- 1
-	}()
-	go func() {
-		fn := 2
-		arg1 := 1
-		arg2 := 3
-		fmt.Println("invoking function#", fn, " with args:", arg1, arg2)
-		res, err := st.Invoke(fn, arg1, arg2)
-		fmt.Println("TEST 2 RESULT:(", arg1, ")+(", arg2, ")=", (*res)[0], " err:", err)
-		quit <- 1
-	}()
-	go func() {
-		fn := 2
-		arg1 := 1
-		arg2 := 1
-		fmt.Println("invoking function#", fn, " with args:", arg1, arg2)
-		res, err := st.Invoke(fn, arg1, arg2)
-		fmt.Println("TEST 3 RESULT:(", arg1, ")+(", arg2, ")=", (*res)[0], " err:", err)
-		quit <- 1
-	}()
-	<-quit
-	<-quit
-	<-quit
-	st.close()
-	sk.close()
+// The Server wiring
+func (s *CalcServer) Add(a []interface{},r *[]interface{}) os.Error {
+	res:=make([]interface{},2)
+	i:=s.s.Iface.(Calc)
+	res[0]=i.Add((a[0]).(float64),(a[1]).(float64))
+	res[1]=nil
+	r=&res
+	return nil
 }
 
+func (s *CalcServer) Subtract(a []interface{}, r *[]interface{}) os.Error {
+	res:=make([]interface{},2)
+	i:=s.s.Iface.(Calc)
+	res[0]=i.Subtract((a[0]).(float64),(a[1]).(float64))
+	res[1]=nil
+	r=&res
+	return nil
+}
+
+func (s *CalcServer) Multiply(a []interface{}, r *[]interface{}) os.Error {
+	res:=make([]interface{},2)
+	i:=s.s.Iface.(Calc)
+	res[0]=i.Multiply((a[0]).(float64),(a[1]).(float64))
+	res[1]=nil
+	r=&res
+	return nil
+}
+
+func (s *CalcServer) Divide(a []interface{}, r *[]interface{}) os.Error {
+	res:=make([]interface{},2)
+	i:=s.s.Iface.(Calc)
+	res[0],res[1]=i.Divide((a[0]).(float64),(a[1]).(float64))
+	r=&res
+	return (res[1]).(os.Error)
+}
+
+// The Client wiring
+type calcClient struct {
+	c	*Client
+}
+
+func (cc *calcClient) add(op1 float64, op2 float64) float64 {
+	r,e:=cc.c.Call("Calc.Add",false,op1,op2)
+	if(e!=nil) {
+		cc.c.HandleError("add",e)
+	}	
+	return
+}
+
+func (cc *calcClient) subtract(op1 float64, op2 float64) float64 {
+	r,e:=c.riic.Call("Calc.subtract",false,op1,op2)	
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float)
+	}	
+	return
+}
+
+func (cc *calcClient) multiply(op1 float64, op2 float64) float64 {
+	r,e:=c.riic.Call("Calc.Multiply",false,op1,op2)
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float64)
+	}	
+	return
+}
+
+func (cc *calcClient) divide(op1 float64, op2 float64) (float64, os.Error) {
+	r,e:=c.riic.Call("Calc.Divide",true,op1,op2)	
+	if(r!=nil && len(r)>0) {
+		res=(r[0]).(float64)
+	}	
+	return
+}
+
+func TestClientServerLocal(t *testing.T) {
+	s:=NewServer(&simplecalc{0})
+	r1,w1:=io.Pipe()
+	r2,w2:=io.Pipe()
+	s.Add(doAdd)
+	s.Add(doSubtract)
+	s.Add(doMultiply)
+	s.Add(doDivide)
+	s.ServePipe(IO(r2,w1))
+	c:=NewClient(IO(r1,w2))
+	cc:=&calcClient{c}
+	
+}

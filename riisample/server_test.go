@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 	"os"
+	"rii"
 )
 
 func runServer() {
-	gobSync(os.Stdin,os.Stdout)
-	cs:=newCalcServer(os.Stdin,os.Stdout,&simplecalc{0})
-	cs.Serve()
+	cs:=newCalcServer(&simplecalc{0})
+	cs.ServePipe(rii.IO(os.Stdin,os.Stdout))
 	fmt.Fprintln(os.Stderr,"Server done")	
 }
 

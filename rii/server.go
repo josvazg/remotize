@@ -13,19 +13,18 @@ import (
 type Server struct {
 	server		*rpc.Server				// rpc server
 	Iface		interface{}				// iface to be invoked
-	Service		interface{}				// type implementing the service
 }
 
 // Create a new RII Server on a local io pipe
-func NewServer(iface interface{}, service interface{}) *Server {
-	s:=&Server{rpc.NewServer(),iface,service}
-	rpc.Register(service)
+func NewServer(iface interface{}) *Server {
+	s:=&Server{rpc.NewServer(),iface}
+	s.server.Register(iface)
 	return s
 }
 
 // Do serve on a (local) pipe
 func (s *Server) ServePipe(rwc io.ReadWriteCloser) {
-	s.server.ServeConn(rwc)
+	go s.server.ServeConn(rwc)
 }
 
 // Do serve on a network listener

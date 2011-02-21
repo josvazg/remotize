@@ -20,6 +20,17 @@ type Client struct {
 	timeout		int64			// default rpc max timeout
 }
 
+// Args
+type Args struct {
+	A []interface{}
+}
+
+// Results
+type Results struct {
+	R []interface{}
+}
+
+
 // UNSET_TIMEOUT
 const NoTimeout=0
 
@@ -33,21 +44,21 @@ func NewClient(rwc io.ReadWriteCloser) *Client {
 
 // RII Call to a method
 // No need to synchronize the transport here, rpc does it already
-func (c *Client) Call(method string, args...interface{}) (*[]interface{}, 
-		os.Error) {
-	var res []interface{}
+func (c *Client) Call(method string, args...interface{}) (*Results, os.Error) {
+	var r Results
+	a:=&Args{args}
 	var e os.Error
 	if(c.timeout==NoTimeout) {
-		e=c.client.Call(method,args,&res)
+		e=c.client.Call(method,a,&r)
 	} else {
-		e=c.callTimeout(method,args,&res,c.timeout)
-    }
-	return &res,e
+		e=c.callTimeout(method,a,&r,c.timeout)
+	}
+	return &r,e
 }
 
 // Call with timeout
-func (c *Client) callTimeout(method string, args []interface{}, 
-	reply *[]interface{}, timeout int64) os.Error { 
+func (c *Client) callTimeout(method string, args interface{}, 
+	reply interface{}, timeout int64) os.Error { 
 	call := c.client.Go(method, args, reply,nil) 
 	select { 
 	case <-call.Done: 

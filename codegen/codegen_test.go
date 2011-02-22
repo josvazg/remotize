@@ -22,10 +22,11 @@ func TestCodegen(t *testing.T) {
 	}
 	e=gf.AddFunc(`func someFunc(a, b int) int {
 		return a+b
-	}`)
+	}`)	
 	if(e!=nil) {
 		fmt.Println(e)
 	}
+	//fmt.Println("Replace importSpec fmt",gf.ReplaceImport("fmt","f"))
 
 	fmt.Println(gf)
 	ast.Print(gf.astFile)

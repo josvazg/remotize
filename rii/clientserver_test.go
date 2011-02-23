@@ -182,3 +182,7 @@ func TestClientServerLocal(t *testing.T) {
 	fmt.Println("1123.1234/-2.21432=",d," e=",e)
 	fmt.Println("pi=",cc.Pi())
 }
+
+func TestRemotize(t *testing.T) {
+	Remotize(new(Calc))
+}

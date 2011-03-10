@@ -1,8 +1,9 @@
-package rii
+package remotize
 
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"testing"
@@ -48,7 +49,7 @@ func (sc *simplecalc) Divide(op1 float64, op2 float64) (float64, os.Error) {
 }
 
 func (sc *simplecalc) Pi() float64 {
-	return 3.14159265
+	return math.Pi
 }
 
 func (sc *simplecalc) Randomize() {
@@ -61,50 +62,50 @@ func (sc *simplecalc) RandomizeSeed(seed float64) {
 
 // The server reference-wrapping type
 type CalcSrv struct {
-	i simplecalc
+	simplecalc
 }
 
 // The Server wiring
-func (s *CalcSrv) Add(a *Args, r *Results) os.Error {
+func (s *CalcSrv) RPCAdd(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.i.Add((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Add((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
-func (s *CalcSrv) Subtract(a *Args, r *Results) os.Error {
+func (s *CalcSrv) RPCSubtract(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.i.Subtract((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Subtract((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
-func (s *CalcSrv) Multiply(a *Args, r *Results) os.Error {
+func (s *CalcSrv) RPCMultiply(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.i.Multiply((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Multiply((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
-func (s *CalcSrv) Divide(a *Args, r *Results) os.Error {
+func (s *CalcSrv) RPCDivide(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 2)
-	r.R[0], r.R[1] = s.i.Divide((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0], r.R[1] = s.Divide((a.A[0]).(float64), (a.A[1]).(float64))
 	if r.R[1] == nil {
 		return nil
 	}
 	return (r.R[1]).(os.Error)
 }
 
-func (s *CalcSrv) Pi(a *Args, r *Results) os.Error {
+func (s *CalcSrv) RPCPi(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.i.Pi()
+	r.R[0] = s.Pi()
 	return nil
 }
 
-func (s *CalcSrv) Randomize(a *Args, r *Results) os.Error {
-	s.i.Randomize()
+func (s *CalcSrv) RPCRandomize(a *Args, r *Results) os.Error {
+	s.Randomize()
 	return nil
 }
 
-func (s *CalcSrv) RandomizeSeed(a *Args, r *Results) os.Error {
-	s.i.RandomizeSeed((a.A[0]).(float64))
+func (s *CalcSrv) RPCRandomizeSeed(a *Args, r *Results) os.Error {
+	s.RandomizeSeed((a.A[0]).(float64))
 	return nil
 }
 
@@ -114,7 +115,7 @@ type calcClient struct {
 }
 
 func (cc *calcClient) Add(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.Add", op1, op2)
+	r, e := cc.c.Call("CalcSrv.RPCAdd", op1, op2)
 	if e != nil {
 		cc.c.HandleError("Calc.Add", e)
 	}
@@ -122,7 +123,7 @@ func (cc *calcClient) Add(op1 float64, op2 float64) float64 {
 }
 
 func (cc *calcClient) Subtract(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.Subtract", op1, op2)
+	r, e := cc.c.Call("CalcSrv.RPCSubtract", op1, op2)
 	if e != nil {
 		cc.c.HandleError("Calc.Substract", e)
 	}
@@ -130,7 +131,7 @@ func (cc *calcClient) Subtract(op1 float64, op2 float64) float64 {
 }
 
 func (cc *calcClient) Multiply(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.Multiply", op1, op2)
+	r, e := cc.c.Call("CalcSrv.RPCMultiply", op1, op2)
 	if e != nil {
 		cc.c.HandleError("Calc.Substract", e)
 	}
@@ -138,12 +139,12 @@ func (cc *calcClient) Multiply(op1 float64, op2 float64) float64 {
 }
 
 func (cc *calcClient) Divide(op1 float64, op2 float64) (float64, os.Error) {
-	r, e := cc.c.Call("CalcSrv.Divide", op1, op2)
+	r, e := cc.c.Call("CalcSrv.RPCDivide", op1, op2)
 	return (r.R[0]).(float64), e
 }
 
 func (cc *calcClient) Pi() float64 {
-	r, e := cc.c.Call("CalcSrv.Pi")
+	r, e := cc.c.Call("CalcSrv.RPCPi")
 	if e != nil {
 		cc.c.HandleError("Calc.Pi", e)
 	}
@@ -151,14 +152,14 @@ func (cc *calcClient) Pi() float64 {
 }
 
 func (cc *calcClient) Randomize() {
-	_, e := cc.c.Call("CalcSrv.Randomize")
+	_, e := cc.c.Call("CalcSrv.RPCRandomize")
 	if e != nil {
 		cc.c.HandleError("Calc.Randomize", e)
 	}
 }
 
 func (cc *calcClient) RandomizeSeed(seed float64) {
-	_, e := cc.c.Call("CalcSrv.RandomizeSeed", seed)
+	_, e := cc.c.Call("CalcSrv.RPCRandomizeSeed", seed)
 	if e != nil {
 		cc.c.HandleError("Calc.RandomizeSeed", e)
 	}

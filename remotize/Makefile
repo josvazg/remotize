@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=rii
-GOFILES=remotize.go client.go server.go codegen.go
+TARG=remotize
+GOFILES=remotize.go
 
 include $(GOROOT)/src/Make.pkg

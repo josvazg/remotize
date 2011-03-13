@@ -12,6 +12,7 @@ import (
 // The interface
 type Calc interface {
 	Add(float64, float64) float64
+	AddTo(*float64, float64)
 	Subtract(float64, float64) float64
 	Multiply(float64, float64) float64
 	Divide(float64, float64) (float64, os.Error)
@@ -28,6 +29,10 @@ type simplecalc struct {
 func (sc *simplecalc) Add(op1 float64, op2 float64) float64 {
 	sc.r = op1 + op2
 	return sc.r
+}
+
+func (sc *simplecalc) AddTo(op1 *float64, op2 float64) {
+	*op1 = *op1 + op2
 }
 
 func (sc *simplecalc) Subtract(op1 float64, op2 float64) float64 {
@@ -69,6 +74,14 @@ type CalcSrv struct {
 func (s *CalcSrv) RPCAdd(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
 	r.R[0] = s.Add((a.A[0]).(float64), (a.A[1]).(float64))
+	return nil
+}
+
+func (s *CalcSrv) RPCAddTo(a *Args, r *Results) os.Error {
+	r.R = make([]interface{}, 1)
+	a0 := (a.A[0]).(float64)
+	r.R[0] = &a0
+	s.AddTo((r.R[0]).(*float64), (a.A[1]).(float64))
 	return nil
 }
 
@@ -120,6 +133,14 @@ func (cc *calcClient) Add(op1 float64, op2 float64) float64 {
 		cc.c.HandleError("Calc.Add", e)
 	}
 	return (r.R[0]).(float64)
+}
+
+func (cc *calcClient) AddTo(op1 *float64, op2 float64) {
+	r, e := cc.c.Call("CalcSrv.RPCAddTo", op1, op2)
+	if e != nil {
+		cc.c.HandleError("Calc.Add", e)
+	}
+	*op1 = (r.R[0]).(float64)
 }
 
 func (cc *calcClient) Subtract(op1 float64, op2 float64) float64 {
@@ -177,6 +198,10 @@ func TestClientServerLocal(t *testing.T) {
 	cc.RandomizeSeed(4123423.2314)
 	fmt.Println("RandomizeSeed(4123423.2314)")
 	fmt.Println("1+2=", cc.Add(1, 2))
+	val := 1.0
+	op := &val
+	cc.AddTo(op, 2)
+	fmt.Println("AddTo 1+2=", *op)
 	fmt.Println("1-2=", cc.Subtract(1, 2))
 	fmt.Println("1123.1234*-2.21432=", cc.Multiply(1123.1234, -2.21432))
 	d, e := cc.Divide(1123.1234, -24.21432)

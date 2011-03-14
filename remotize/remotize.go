@@ -175,7 +175,7 @@ ${Imports}
 
 // Server wrapper for ${Iface}
 type ${Iface}Server struct {
-	${Iface}
+	s	${Iface}
 }
 
 // Client wrapper for ${Iface}
@@ -419,7 +419,7 @@ func (w *wrapgen) serverWrapper() {
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, " = ")
 	}
-	fmt.Fprintf(w.Calls, "s.%v(", m.Name)
+	fmt.Fprintf(w.Calls, "s.s.%v(", m.Name)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
 		if i != 0 {

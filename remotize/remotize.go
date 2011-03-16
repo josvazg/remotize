@@ -19,9 +19,50 @@ import (
 	"rpc"
 	"sort"
 	"strings"
+	"sync"
 	"template"
 	"time"
 )
+
+// Remotized Registry
+type Registry struct {
+	remotized map[string]reflect.Type
+	lock      sync.RWMutex
+}
+
+// Remotized types registry
+var Remotized = &Registry{remotized: make(map[string]reflect.Type)}
+
+// Add to remotized registry
+func (r *Registry) Add(t reflect.Type) {
+	name := fmt.Sprintf("%v", t)
+	r.lock.Lock()
+	r.remotized[name] = t
+	fmt.Println("Registry is now", r.remotized)
+	r.lock.Unlock()
+}
+
+// Remove from registry
+func (r *Registry) Remove(name string) {
+	r.lock.Lock()
+	r.remotized[name] = nil, false
+	r.lock.Unlock()
+}
+
+// Find from registry
+func (r *Registry) Find(name string) reflect.Type {
+	r.lock.RLock()
+	defer r.lock.RLock()
+	return r.remotized[name]
+}
+
+// Is this name contained in the registry?
+func (r *Registry) Contains(name string) bool {
+	r.lock.RLock()
+	defer r.lock.RLock()
+	_, ok := r.remotized[name]
+	return ok
+}
 
 // Error handler interface
 type ErrorHandling func(string, os.Error)
@@ -173,6 +214,12 @@ import (
 ${Imports}
 )
 
+// Autoregistry
+func init() {
+	${Prefix}Remotized.Add(reflect.Typeof(${Iface}Server{}))
+	${Prefix}Remotized.Add(reflect.Typeof(${Iface}Client{}))
+}
+
 // Server wrapper for ${Iface}
 type ${Iface}Server struct {
 	s	${Iface}
@@ -243,7 +290,7 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 	w := &wrapgen{Iface: Ifacename,
 		Pack:    pack,
 		Calls:   bytes.NewBuffer(make([]byte, 0)),
-		imports: []string{"os"},
+		imports: []string{"os", "reflect"},
 	}
 	if pack != "remotize" {
 		w.imports = append(w.imports, "remotize")

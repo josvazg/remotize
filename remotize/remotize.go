@@ -187,9 +187,10 @@ ${Calls}
 `
 
 type methodInfo struct {
-	m   reflect.Method
-	re  bool
-	pos int
+	m    reflect.Method
+	re   bool
+	pos  int
+	ptrs []int
 }
 
 type wrapgen struct {
@@ -256,6 +257,7 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 // addMethod wraps another method fo the interface
 func (w *wrapgen) addMethod(m reflect.Method) {
 	re, pos := returnsError(m)
+	ptrs := inouts(m)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
 		w.addImport(m.Type.In(i).PkgPath())
@@ -264,7 +266,7 @@ func (w *wrapgen) addMethod(m reflect.Method) {
 	for i := 0; i < nout; i++ {
 		w.addImport(m.Type.Out(i).PkgPath())
 	}
-	w.methods = append(w.methods, methodInfo{m, re, pos})
+	w.methods = append(w.methods, methodInfo{m, re, pos, ptrs})
 	w.clientWrapper()
 	w.serverWrapper()
 }
@@ -318,15 +320,16 @@ func (w *wrapgen) clientWrapper() {
 	mi := w.methods[len(w.methods)-1]
 	w.methodSignature(mi.m)
 	fmt.Fprintf(w.Calls, " {\n")
-	w.wrapCall(mi.m)
+	w.wrapCall(mi)
 	w.clientReturn(mi)
 	fmt.Fprintf(w.Calls, "}\n\n")
 }
 
 // wrapCall wrapps the call to the server RPC
-func (w *wrapgen) wrapCall(m reflect.Method) {
+func (w *wrapgen) wrapCall(mi methodInfo) {
+	m := mi.m
 	r := "r"
-	if m.Type.NumOut() == 0 {
+	if m.Type.NumOut()+len(mi.ptrs) == 0 {
 		r = "_"
 	}
 	fmt.Fprintf(w.Calls, "\t%v, e := c.c.Call(\"%vServer.RPC%v\",", r, w.Iface,
@@ -382,6 +385,11 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 		fmt.Fprintf(w.Calls, "\t}\n")
 	}
 	nout := m.Type.NumOut()
+	ninouts := len(mi.ptrs)
+	for i := 0; i < ninouts; i++ {
+		fmt.Fprintf(w.Calls, "\t*a%v=(r.R[%v]).(%v)\n", mi.ptrs[i]+1, nout+i,
+			m.Type.In(mi.ptrs[i]).(*reflect.PtrType).Elem())
+	}
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, "\treturn ")
 		for i := 0; i < nout; i++ {
@@ -406,8 +414,14 @@ func (w *wrapgen) serverWrapper() {
 	fmt.Fprintf(w.Calls, "func (s *%vServer) RPC%v(", w.Iface, m.Name)
 	fmt.Fprintf(w.Calls, "a *Args, r *Results) os.Error {\n")
 	nout := m.Type.NumOut()
-	if nout > 0 {
-		fmt.Fprintf(w.Calls, "\tr.R= make([]interface{}, %v)\n", nout)
+	ninouts := len(mi.ptrs)
+	if nout+ninouts > 0 {
+		fmt.Fprintf(w.Calls, "\tr.R= make([]interface{}, %v)\n", nout+ninouts)
+	}
+	for i := 0; i < ninouts; i++ {
+		fmt.Fprintf(w.Calls, "\ta%v := (a.A[%v]).(%v)\n", mi.ptrs[i]+1, nout+i,
+			m.Type.In(mi.ptrs[i]).(*reflect.PtrType).Elem())
+		fmt.Fprintf(w.Calls, "\tr.R[%v] = &a%v\n", nout+i, mi.ptrs[i]+1)
 	}
 	fmt.Fprintf(w.Calls, "\t")
 	for i := 0; i < nout; i++ {
@@ -421,11 +435,17 @@ func (w *wrapgen) serverWrapper() {
 	}
 	fmt.Fprintf(w.Calls, "s.s.%v(", m.Name)
 	nin := m.Type.NumIn()
+	j := 0
 	for i := 0; i < nin; i++ {
 		if i != 0 {
 			fmt.Fprintf(w.Calls, ", ")
 		}
-		fmt.Fprintf(w.Calls, "(a.A[%v]).(%v)", i, m.Type.In(i))
+		if j < ninouts && i == mi.ptrs[j] {
+			fmt.Fprintf(w.Calls, "(r.R[%v]).(%v)", nout+j, m.Type.In(mi.ptrs[i]))
+			j++
+		} else {
+			fmt.Fprintf(w.Calls, "(a.A[%v]).(%v)", i, m.Type.In(i))
+		}
 	}
 	fmt.Fprintf(w.Calls, ")\n")
 	if mi.re {
@@ -447,5 +467,19 @@ func returnsError(m reflect.Method) (hasError bool, pos int) {
 		}
 	}
 	return false, -1
+}
+
+// inouts returns an array with the positions (starting at o) of input 
+// parameters that are pointers. 
+// Those pointers should be treated as input/output parameters
+func inouts(m reflect.Method) []int {
+	nin := m.Type.NumIn()
+	ptrs := make([]int, 0)
+	for i := 0; i < nin; i++ {
+		if m.Type.In(i).Kind() == reflect.Ptr {
+			ptrs = append(ptrs, i)
+		}
+	}
+	return ptrs
 }
 

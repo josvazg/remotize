@@ -1,13 +1,7 @@
 include $(GOROOT)/src/Make.inc
 
-GOREMOTIZED=$(ls *Remotized.go)
-
 TARG=remotize
-GOFILES=remotize.go $(GOREMOTIZED)
+GOFILES=remotize.go
 
-all: prebuild
+include ./Make.prepkg
 
-prebuild:
-	@echo Prebuild
-
-include $(GOROOT)/src/Make.pkg

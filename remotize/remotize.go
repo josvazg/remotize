@@ -24,6 +24,11 @@ import (
 	"time"
 )
 
+// Setter interface to initialize the Servers
+type Setter interface {
+	set(interface{})
+}
+
 // Remotized Registry
 type Registry struct {
 	remotized map[string]reflect.Type
@@ -50,18 +55,79 @@ func (r *Registry) Remove(name string) {
 }
 
 // Find from registry
-func (r *Registry) Find(name string) reflect.Type {
+func (r *Registry) find(name string) reflect.Type {
 	r.lock.RLock()
 	defer r.lock.RLock()
 	return r.remotized[name]
 }
 
-// Is this name contained in the registry?
-func (r *Registry) Contains(name string) bool {
+// Contains replies to 'Is this name contained in the registry?'
+func (r *Registry) contains(name string) bool {
 	r.lock.RLock()
 	defer r.lock.RLock()
 	_, ok := r.remotized[name]
 	return ok
+}
+
+// Instatiante returns an instance of the given type if found in the registry, 
+// or nil otherwise
+func (r *Registry) instantiate(name string) interface{} {
+	t := r.find(name)
+	if t == nil {
+		return nil
+	}
+	return reflect.MakeZero(t)
+}
+
+// named returns the name of the given underliying type. Pointers are followed
+// up to the final referenced type
+func nameFor(i interface{}) string {
+	t := reflect.Typeof(i)
+	for t.Kind() == reflect.Ptr {
+		t = (t).(*reflect.PtrType).Elem()
+	}
+	return fmt.Sprintf("%v", t)
+}
+
+// NewClient instantiates a client for the given interface name, 
+// if found on the registry, otherwise nil is returned.
+// If pack is NOT empty that package name is used to locate the remotization,
+// use it when the remotized code is on a different package from the 
+// remotized interface
+func (r *Registry) NewClient(ifacename, pack string) interface{} {
+	if pack != "" {
+		dotpos := strings.LastIndex(ifacename, ".")
+		ifacename = pack + "." + ifacename[dotpos:]
+	}
+	return r.instantiate(ifacename + "Client")
+}
+
+// NewClientFor instantiates (if found) the client for the given interface,
+// otherwise nil is returned
+func (r *Registry) NewClientFor(i interface{}, pack string) interface{} {
+	return r.NewClient(nameFor(i), pack)
+}
+
+// NewServer instantiates a server for the given interface name,
+// if found on the registry, otherwise nil is returned.
+// It also initiates it with the implementation of that interface
+func (r *Registry) NewServer(ifacename, pack string, impl interface{}) interface{} {
+	if pack != "" {
+		dotpos := strings.LastIndex(ifacename, ".")
+		ifacename = pack + "." + ifacename[dotpos:]
+	}
+	s := r.instantiate(ifacename + "Server")
+	if s != nil {
+		(s).(Setter).set(impl)
+	}
+	return s
+}
+
+// NewServerFor instantiates a server for the given interface,
+// if found on the registry, otherwise nil is returned.
+// It also initiates it with the implementation of that interface
+func (r *Registry) NewServerFor(i, impl interface{}, pack string) interface{} {
+	return r.NewServer(nameFor(i), pack, impl)
 }
 
 // Error handler interface
@@ -228,6 +294,11 @@ type ${Iface}Server struct {
 // Client wrapper for ${Iface}
 type ${Iface}Client struct {
 	c	*${Prefix}Client
+}
+
+// Setting the implementation
+func (s *${Iface}Server) set(s interface{}) {
+	s.s=s
 }
 
 ${Calls}

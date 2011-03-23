@@ -35,18 +35,18 @@ ${Imports}
 
 // Autoregistry
 func init() {
-	${Prefix}Remotized(reflect.Typeof(${Iface}Server{}))
-	${Prefix}Remotized(reflect.Typeof(${Iface}Client{}))
+	${Prefix}Export(reflect.Typeof(${Iface}Server{}))
+	${Prefix}Export(reflect.Typeof(${Iface}Client{}))
 }
 
 // Server wrapper for ${Iface}
 type ${Iface}Server struct {
-	s	${Iface}
+	Server
 }
 
 // Client wrapper for ${Iface}
 type ${Iface}Client struct {
-	c	*${Prefix}Client
+	${Prefix}Client
 }
 
 ${Calls}
@@ -67,6 +67,16 @@ type Client struct {
 type Server struct {
 	server *rpc.Server // rpc server
 	impl   interface{} // iface implementation to be invoked
+}
+
+// Server converter interface
+type serverConverter interface {
+	ToServer() *Server
+}
+
+// Client converter interface
+type clientConverter interface {
+	ToClient() *Client
 }
 
 // Args
@@ -120,10 +130,11 @@ var lock sync.RWMutex
 // Default Remotize error handling routine for all remote interfaces
 var DefaultErrorHandling ErrorHandling
 
-// Access to client type
-func (c *Client) Clt() *Client {
-	return c
-}
+// ToClient gets the client reference
+func (c *Client) ToClient() *Client { return c }
+
+// ToServer gets the server reference
+func (s *Server) ToServer() *Server { return s }
 
 // Add a remotized type to the registry. The type is Exported since that moment
 func Export(t reflect.Type) {
@@ -155,7 +166,8 @@ func instantiate(name string) interface{} {
 	if t == nil {
 		return nil
 	}
-	return reflect.MakeZero(t)
+	i := reflect.MakeZero(t).Interface()
+	return &i
 }
 
 // named returns the name of the given underliying type. Pointers are followed
@@ -179,12 +191,18 @@ func NewClient(client *rpc.Client, i interface{}, pack string) *Client {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	c := instantiate(ifacename + "Client").(*Client)
+	c := instantiate(ifacename + "Client")
 	if c != nil {
-		c.client = client
-		c.handler = nil
-		c.timeout = NoTimeout
+		return SetupClient(c.(clientConverter).ToClient(), client)
 	}
+	return nil
+}
+
+// SetupClient sets up defaults for an empty client
+func SetupClient(c *Client, client *rpc.Client) *Client {
+	c.client = client
+	c.handler = nil
+	c.timeout = NoTimeout
 	return c
 }
 
@@ -192,19 +210,27 @@ func NewClient(client *rpc.Client, i interface{}, pack string) *Client {
 // if found on the registry, otherwise nil is returned.
 // It also initiates it with the implementation of that interface
 func NewServer(i, impl interface{}, pack string) *Server {
+	if impl == nil {
+		impl = i
+	}
 	ifacename := nameFor(i)
 	if pack != "" {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	ref := instantiate(ifacename + "Server")
-	if ref != nil {
-		s := ref.(*Server)
-		s.server = rpc.NewServer()
-		s.server.Register(i)
-		s.impl = impl
+	s := instantiate(ifacename + "Server")
+	if s != nil {
+		return SetupServer(s.(serverConverter).ToServer(), s, rpc.NewServer(), impl)
 	}
 	return nil
+}
+
+// SetupServer sets up en empty server (i must be of underlyng type Server)
+func SetupServer(s *Server, i interface{}, server *rpc.Server, impl interface{}) *Server {
+	s.server = server
+	s.server.Register(i)
+	s.impl = impl
+	return s
 }
 
 // Server returns the underlying rpc Server
@@ -416,8 +442,8 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 	if m.Type.NumOut()+len(mi.ptrs) == 0 {
 		r = "_"
 	}
-	fmt.Fprintf(w.Calls, "\t%v, e := c.c.Call(\"%vServer.RPC%v\",", r, w.Iface,
-		m.Name)
+	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.ToClient(),\"%vServer.RPC%v\",",
+		r, w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
 		if i > 0 {
@@ -464,8 +490,8 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 	m := mi.m
 	if !mi.re {
 		fmt.Fprintf(w.Calls, "\tif e != nil {\n")
-		fmt.Fprintf(w.Calls, "\t\tc.c.HandleError(\"%v.%v\", e)\n", w.Iface,
-			m.Name)
+		fmt.Fprintf(w.Calls, "\t\tHandleError(c.ToClient(),\"%v.%v\", e)\n",
+			w.Iface, m.Name)
 		fmt.Fprintf(w.Calls, "\t}\n")
 	}
 	nout := m.Type.NumOut()
@@ -517,7 +543,7 @@ func (w *wrapgen) serverWrapper() {
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, " = ")
 	}
-	fmt.Fprintf(w.Calls, "s.s.%v(", m.Name)
+	fmt.Fprintf(w.Calls, "s.impl.(%v).%v(", w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	j := 0
 	for i := 0; i < nin; i++ {

@@ -70,12 +70,12 @@ type Server struct {
 }
 
 // Server converter interface
-type serverConverter interface {
+type ServerWrapper interface {
 	ToServer() *Server
 }
 
 // Client converter interface
-type clientConverter interface {
+type ClientWrapper interface {
 	ToClient() *Client
 }
 
@@ -140,7 +140,7 @@ func (s *Server) ToServer() *Server { return s }
 func Export(t reflect.Type) {
 	name := fmt.Sprintf("%v", t)
 	lock.Lock()
-	reg[name] = t
+	reg[name] = reflect.PtrTo(t)
 	fmt.Println("Registry is now", reg)
 	lock.Unlock()
 }
@@ -166,8 +166,7 @@ func instantiate(name string) interface{} {
 	if t == nil {
 		return nil
 	}
-	i := reflect.MakeZero(t).Interface()
-	return &i
+	return reflect.MakeZero(t).Interface()
 }
 
 // named returns the name of the given underliying type. Pointers are followed
@@ -193,7 +192,7 @@ func NewClient(client *rpc.Client, i interface{}, pack string) *Client {
 	}
 	c := instantiate(ifacename + "Client")
 	if c != nil {
-		return SetupClient(c.(clientConverter).ToClient(), client)
+		return SetupClient(c.(ClientWrapper).ToClient(), client)
 	}
 	return nil
 }
@@ -219,8 +218,9 @@ func NewServer(i, impl interface{}, pack string) *Server {
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
 	s := instantiate(ifacename + "Server")
+	fmt.Println("typeof(s)=", reflect.Typeof(s))
 	if s != nil {
-		return SetupServer(s.(serverConverter).ToServer(), s, rpc.NewServer(), impl)
+		return SetupServer(s.(ServerWrapper).ToServer(), s, rpc.NewServer(), impl)
 	}
 	return nil
 }

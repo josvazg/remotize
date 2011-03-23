@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"rpc"
 	"strconv"
 	"testing"
 )
@@ -61,13 +62,14 @@ func (sc *simplecalc) RandomizeSeed(seed float64) {
 
 // The server reference-wrapping type
 type CalcSrv struct {
-	s Calc
+	server *Server
+	Calc
 }
 
 // The Server wiring
 func (s *CalcSrv) RPCAdd(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.s.Add((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Add((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
@@ -75,25 +77,25 @@ func (s *CalcSrv) RPCAddTo(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
 	a0 := (a.A[0]).(float64)
 	r.R[0] = &a0
-	s.s.AddTo((r.R[0]).(*float64), (a.A[1]).(float64))
+	s.AddTo((r.R[0]).(*float64), (a.A[1]).(float64))
 	return nil
 }
 
 func (s *CalcSrv) RPCSubtract(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.s.Subtract((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Subtract((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
 func (s *CalcSrv) RPCMultiply(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.s.Multiply((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0] = s.Multiply((a.A[0]).(float64), (a.A[1]).(float64))
 	return nil
 }
 
 func (s *CalcSrv) RPCDivide(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 2)
-	r.R[0], r.R[1] = s.s.Divide((a.A[0]).(float64), (a.A[1]).(float64))
+	r.R[0], r.R[1] = s.Divide((a.A[0]).(float64), (a.A[1]).(float64))
 	if r.R[1] == nil {
 		return nil
 	}
@@ -102,106 +104,109 @@ func (s *CalcSrv) RPCDivide(a *Args, r *Results) os.Error {
 
 func (s *CalcSrv) RPCPi(a *Args, r *Results) os.Error {
 	r.R = make([]interface{}, 1)
-	r.R[0] = s.s.Pi()
+	r.R[0] = s.Pi()
 	return nil
 }
 
 func (s *CalcSrv) RPCRandomize(a *Args, r *Results) os.Error {
-	s.s.Randomize()
+	s.Randomize()
 	return nil
 }
 
 func (s *CalcSrv) RPCRandomizeSeed(a *Args, r *Results) os.Error {
-	s.s.RandomizeSeed((a.A[0]).(float64))
+	s.RandomizeSeed((a.A[0]).(float64))
 	return nil
 }
 
 // The Client reference wiring
 type calcClient struct {
-	c *Client
+	Client
 }
 
-func (cc *calcClient) Add(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.RPCAdd", op1, op2)
+func (c *calcClient) Add(op1 float64, op2 float64) float64 {
+	r, e := Call(c.Clt(), "CalcSrv.RPCAdd", op1, op2)
 	if e != nil {
-		cc.c.HandleError("Calc.Add", e)
+		HandleError(c.Clt(), "Calc.Add", e)
 	}
 	return (r.R[0]).(float64)
 }
 
-func (cc *calcClient) AddTo(op1 *float64, op2 float64) {
-	r, e := cc.c.Call("CalcSrv.RPCAddTo", op1, op2)
+func (c *calcClient) AddTo(op1 *float64, op2 float64) {
+	r, e := Call(c.Clt(), "CalcSrv.RPCAddTo", op1, op2)
 	if e != nil {
-		cc.c.HandleError("Calc.Add", e)
+		HandleError(c.Clt(), "Calc.Add", e)
 	}
 	*op1 = (r.R[0]).(float64)
 }
 
-func (cc *calcClient) Subtract(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.RPCSubtract", op1, op2)
+func (c *calcClient) Subtract(op1 float64, op2 float64) float64 {
+	r, e := Call(c.Clt(), "CalcSrv.RPCSubtract", op1, op2)
 	if e != nil {
-		cc.c.HandleError("Calc.Substract", e)
+		HandleError(c.Clt(), "Calc.Substract", e)
 	}
 	return (r.R[0]).(float64)
 }
 
-func (cc *calcClient) Multiply(op1 float64, op2 float64) float64 {
-	r, e := cc.c.Call("CalcSrv.RPCMultiply", op1, op2)
+func (c *calcClient) Multiply(op1 float64, op2 float64) float64 {
+	r, e := Call(c.Clt(), "CalcSrv.RPCMultiply", op1, op2)
 	if e != nil {
-		cc.c.HandleError("Calc.Substract", e)
+		HandleError(c.Clt(), "Calc.Substract", e)
 	}
 	return (r.R[0]).(float64)
 }
 
-func (cc *calcClient) Divide(op1 float64, op2 float64) (float64, os.Error) {
-	r, e := cc.c.Call("CalcSrv.RPCDivide", op1, op2)
+func (c *calcClient) Divide(op1 float64, op2 float64) (float64, os.Error) {
+	r, e := Call(c.Clt(), "CalcSrv.RPCDivide", op1, op2)
 	return (r.R[0]).(float64), e
 }
 
-func (cc *calcClient) Pi() float64 {
-	r, e := cc.c.Call("CalcSrv.RPCPi")
+func (c *calcClient) Pi() float64 {
+	r, e := Call(c.Clt(), "CalcSrv.RPCPi")
 	if e != nil {
-		cc.c.HandleError("Calc.Pi", e)
+		HandleError(c.Clt(), "Calc.Pi", e)
 	}
 	return (r.R[0]).(float64)
 }
 
-func (cc *calcClient) Randomize() {
-	_, e := cc.c.Call("CalcSrv.RPCRandomize")
+func (c *calcClient) Randomize() {
+	_, e := Call(c.Clt(), "CalcSrv.RPCRandomize")
 	if e != nil {
-		cc.c.HandleError("Calc.Randomize", e)
+		HandleError(c.Clt(), "Calc.Randomize", e)
 	}
 }
 
-func (cc *calcClient) RandomizeSeed(seed float64) {
-	_, e := cc.c.Call("CalcSrv.RPCRandomizeSeed", seed)
+func (c *calcClient) RandomizeSeed(seed float64) {
+	_, e := Call(c.Clt(), "CalcSrv.RPCRandomizeSeed", seed)
 	if e != nil {
-		cc.c.HandleError("Calc.RandomizeSeed", e)
+		HandleError(c.Clt(), "Calc.RandomizeSeed", e)
 	}
 }
 
 func TestClientServerLocal(t *testing.T) {
 	fmt.Println("Test with reference code")
-	s := NewServer(&CalcSrv{&simplecalc{}})
-	r1, w1 := io.Pipe()
+
+	s := &CalcSrv{&Server{rpc.NewServer(), new(Calc)}, &simplecalc{}}
+	fmt.Println("register...")
+	s.server.Register(&CalcSrv{})
+	/*r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
-	s.ServePipe(IO(r2, w1))
-	c := NewClient(IO(r1, w2))
-	cc := &calcClient{c}
-	cc.Randomize()
+	go s.server.ServeConn(IO(r2, w1))
+
+	c := &calcClient{Client{rpc.NewClient(IO(r1, w2)), nil, 0}}
+	c.Randomize()
 	fmt.Println("Randomize()")
-	cc.RandomizeSeed(4123423.2314)
+	c.RandomizeSeed(4123423.2314)
 	fmt.Println("RandomizeSeed(4123423.2314)")
-	fmt.Println("1+2=", cc.Add(1, 2))
+	fmt.Println("1+2=", c.Add(1, 2))
 	val := 1.0
 	op := &val
-	cc.AddTo(op, 2)
+	c.AddTo(op, 2)
 	fmt.Println("AddTo 1+2=", *op)
-	fmt.Println("1-2=", cc.Subtract(1, 2))
-	fmt.Println("1123.1234*-2.21432=", cc.Multiply(1123.1234, -2.21432))
-	d, e := cc.Divide(1123.1234, -24.21432)
+	fmt.Println("1-2=", c.Subtract(1, 2))
+	fmt.Println("1123.1234*-2.21432=", c.Multiply(1123.1234, -2.21432))
+	d, e := c.Divide(1123.1234, -24.21432)
 	fmt.Println("1123.1234/-2.21432=", d, " e=", e)
-	fmt.Println("pi=", cc.Pi())
+	fmt.Println("pi=", c.Pi())*/
 }
 
 func TestRemotize(t *testing.T) {
@@ -211,28 +216,34 @@ func TestRemotize(t *testing.T) {
 
 func TestRemotized(t *testing.T) {
 	fmt.Println("Test with autogenerated code")
-	s := (Remotized.NewServerFor(new(Calc), &simplecalc{}, "")).(*Server)
+	s := NewServer(new(Calc), &simplecalc{}, "")
 	if s == nil {
-		fmt.Println("Autogenrated code not ready yet")
+		fmt.Println("Autogenerated code not ready yet")
+		return
 	}
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
-	s.ServePipe(IO(r2, w1))
-	cc := Remotized.NewClientFor(&Calc{}, "").(Calc)
-	cc.Randomize()
+	go s.server.ServeConn(IO(r2, w1))
+	ref := NewClient(rpc.NewClient(IO(r1, w2)), new(Calc), "")
+	if ref == nil {
+		fmt.Println("Autogenerated code client not ready yet")
+		return
+	}
+	c := (interface{})(ref).(*calcClient)
+	c.Randomize()
 	fmt.Println("Randomize()")
-	cc.RandomizeSeed(4123423.2314)
+	c.RandomizeSeed(4123423.2314)
 	fmt.Println("RandomizeSeed(4123423.2314)")
-	fmt.Println("1+2=", cc.Add(1, 2))
+	fmt.Println("1+2=", c.Add(1, 2))
 	// Support for in/out parameters
 	val := 1.0
 	op := &val
-	cc.AddTo(op, 2)
+	c.AddTo(op, 2)
 	fmt.Println("AddTo 1+2=", *op)
-	fmt.Println("1-2=", cc.Subtract(1, 2))
-	fmt.Println("1123.1234*-2.21432=", cc.Multiply(1123.1234, -2.21432))
-	d, e := cc.Divide(1123.1234, -24.21432)
+	fmt.Println("1-2=", c.Subtract(1, 2))
+	fmt.Println("1123.1234*-2.21432=", c.Multiply(1123.1234, -2.21432))
+	d, e := c.Divide(1123.1234, -24.21432)
 	fmt.Println("1123.1234/-2.21432=", d, " e=", e)
-	fmt.Println("pi=", cc.Pi())
+	fmt.Println("pi=", c.Pi())
 }
 

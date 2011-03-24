@@ -56,7 +56,7 @@ ${Calls}
 // Error handler interface
 type ErrorHandling func(string, os.Error)
 
-// RemotizedClient using the rpc package as transport
+// Remotized Client using the rpc package as transport
 type Client struct {
 	client  *rpc.Client   // rpc transport
 	handler ErrorHandling // default error handler
@@ -69,14 +69,14 @@ type Server struct {
 	impl   interface{} // iface implementation to be invoked
 }
 
-// Server converter interface
-type ServerWrapper interface {
-	ToServer() *Server
-}
-
 // Client converter interface
 type ClientWrapper interface {
 	ToClient() *Client
+}
+
+// Server converter interface
+type ServerWrapper interface {
+	ToServer() *Server
 }
 
 // Args
@@ -140,7 +140,7 @@ func (s *Server) ToServer() *Server { return s }
 func Export(t reflect.Type) {
 	name := fmt.Sprintf("%v", t)
 	lock.Lock()
-	reg[name] = reflect.PtrTo(t)
+	reg[name] = t
 	fmt.Println("Registry is now", reg)
 	lock.Unlock()
 }
@@ -159,14 +159,14 @@ func find(name string) reflect.Type {
 	return reg[name]
 }
 
-// instatiante returns an instance of the given type if found in the registry, 
-// or nil otherwise
+// instatiante returns a Ptr instance of the given type, 
+// if found in the registry, or nil otherwise
 func instantiate(name string) interface{} {
 	t := find(name)
 	if t == nil {
 		return nil
 	}
-	return reflect.MakeZero(t).Interface()
+	return reflect.MakeZero(t).Addr().Interface()
 }
 
 // named returns the name of the given underliying type. Pointers are followed
@@ -184,7 +184,7 @@ func nameFor(i interface{}) string {
 // If pack is NOT empty that package name is used to locate the remotization,
 // use it when the remotized code is on a different package from the 
 // remotized interface
-func NewClient(client *rpc.Client, i interface{}, pack string) *Client {
+func NewClient(client *rpc.Client, i interface{}, pack string) interface{} {
 	ifacename := nameFor(i)
 	if pack != "" {
 		dotpos := strings.LastIndex(ifacename, ".")
@@ -192,7 +192,8 @@ func NewClient(client *rpc.Client, i interface{}, pack string) *Client {
 	}
 	c := instantiate(ifacename + "Client")
 	if c != nil {
-		return SetupClient(c.(ClientWrapper).ToClient(), client)
+		SetupClient(c.(ClientWrapper).ToClient(), client)
+		return c
 	}
 	return nil
 }
@@ -225,7 +226,7 @@ func NewServer(i, impl interface{}, pack string) *Server {
 	return nil
 }
 
-// SetupServer sets up en empty server (i must be of underlyng type Server)
+// SetupServer sets up en empty server (it must be of underlyng type Server)
 func SetupServer(s *Server, i interface{}, server *rpc.Server, impl interface{}) *Server {
 	s.server = server
 	s.server.Register(i)

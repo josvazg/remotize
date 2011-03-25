@@ -56,27 +56,28 @@ ${Calls}
 // Error handler interface
 type ErrorHandling func(string, os.Error)
 
-// Remotized Client using the rpc package as transport
-type Client struct {
+// Remotized client type
+type Clt struct {
 	client  *rpc.Client   // rpc transport
-	handler ErrorHandling // default error handler
-	timeout int64         // default rpc max timeout
+	Handler ErrorHandling // default error handler
+	Timeout int64         // default rpc max timeout
 }
 
-// Remotized Server using the rpc package as transport
-type Server struct {
+// Remotized Client using the rpc package as transport
+type Client interface {
+	Bind(*rpc.Client) // Binds this client to a rpc.Client
+	Cfg() *Clt        // Gets a reference to the Clt configurable fields
+}
+
+// Remotized server type
+type Srv struct {
 	server *rpc.Server // rpc server
 	impl   interface{} // iface implementation to be invoked
 }
 
-// Client converter interface
-type ClientWrapper interface {
-	ToClient() *Client
-}
-
-// Server converter interface
-type ServerWrapper interface {
-	ToServer() *Server
+// Remotized Server using the rpc package as transport
+type Server interface {
+	Bind(*rpc.Server, interface{}) // Binds this server to a rpc.Server
 }
 
 // Args
@@ -127,28 +128,37 @@ var reg = make(map[string]reflect.Type)
 // Registry's lock
 var lock sync.RWMutex
 
-// Default Remotize error handling routine for all remote interfaces
-var DefaultErrorHandling ErrorHandling
+// Bind associates a Clt Client against a rpc.Client
+func (c *Clt) Bind(client *rpc.Client) {
+	c.client = client
+}
 
-// ToClient gets the client reference
-func (c *Client) ToClient() *Client { return c }
+// Gets a reference to the Clt configurable fields on Clt itself
+func (c *Clt) Cfg() *Clt {
+	return c
+}
 
-// ToServer gets the server reference
-func (s *Server) ToServer() *Server { return s }
+// Bind associates a Srv Server against a rpc.Server and some implementation
+func (s *Srv) Bind(server *rpc.Server, impl interface{}) {
+	s.server = server
+	s.impl = impl
+}
 
 // Add a remotized type to the registry. The type is Exported since that moment
-func Export(t reflect.Type) {
+func Remotize(ct, st reflect.Type) {
 	name := fmt.Sprintf("%v", t)
 	lock.Lock()
-	reg[name] = t
+	reg[name] = ct
+	reg[name] = st
 	fmt.Println("Registry is now", reg)
 	lock.Unlock()
 }
 
 // Remove a type from registry. The type is UnExported since that moment
-func UnExport(name string) {
+func UnRemotize(name string) {
 	lock.Lock()
-	reg[name] = nil, false
+	reg[name+"Client"] = nil, false
+	reg[name+"Server"] = nil, false
 	lock.Unlock()
 }
 
@@ -184,7 +194,7 @@ func nameFor(i interface{}) string {
 // If pack is NOT empty that package name is used to locate the remotization,
 // use it when the remotized code is on a different package from the 
 // remotized interface
-func NewClient(client *rpc.Client, i interface{}, pack string) interface{} {
+func NewClient(client *rpc.Client, i interface{}, pack string) Client {
 	ifacename := nameFor(i)
 	if pack != "" {
 		dotpos := strings.LastIndex(ifacename, ".")
@@ -192,18 +202,10 @@ func NewClient(client *rpc.Client, i interface{}, pack string) interface{} {
 	}
 	c := instantiate(ifacename + "Client")
 	if c != nil {
-		SetupClient(c.(ClientWrapper).ToClient(), client)
+		c.(Client).Bind(client)
 		return c
 	}
 	return nil
-}
-
-// SetupClient sets up defaults for an empty client
-func SetupClient(c *Client, client *rpc.Client) *Client {
-	c.client = client
-	c.handler = nil
-	c.timeout = NoTimeout
-	return c
 }
 
 // NewServer instantiates a server for the given interface,
@@ -219,19 +221,10 @@ func NewServer(i, impl interface{}, pack string) *Server {
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
 	s := instantiate(ifacename + "Server")
-	fmt.Println("typeof(s)=", reflect.Typeof(s))
 	if s != nil {
-		return SetupServer(s.(ServerWrapper).ToServer(), s, rpc.NewServer(), impl)
+		return s.(Server).Bind(rpc.NewServer(), impl)
 	}
 	return nil
-}
-
-// SetupServer sets up en empty server (it must be of underlyng type Server)
-func SetupServer(s *Server, i interface{}, server *rpc.Server, impl interface{}) *Server {
-	s.server = server
-	s.server.Register(i)
-	s.impl = impl
-	return s
 }
 
 // Server returns the underlying rpc Server

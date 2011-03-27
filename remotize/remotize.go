@@ -35,18 +35,30 @@ ${Imports}
 
 // Autoregistry
 func init() {
-	${Prefix}Export(reflect.Typeof(${Iface}Server{}))
-	${Prefix}Export(reflect.Typeof(${Iface}Client{}))
+	${Prefix}Register(${Iface}Client{},${Iface}Server{})
+}
+
+// RPC server exported interface
+type ${Iface}RPCs struct {
+	s *${Iface}Server
 }
 
 // Server wrapper for ${Iface}
 type ${Iface}Server struct {
-	Server
+	Srv
+	Rpcs	*${Iface}RPCs
 }
 
 // Client wrapper for ${Iface}
 type ${Iface}Client struct {
-	${Prefix}Client
+	${Prefix}Clt
+}
+
+// Bind service
+func (s *${Iface}Server) Bind(server *rpc.Server, impl interface{}) {
+	s.Base().Bind(server,impl)
+	s.Rpcs = &${Iface}RPCs{s}
+	server.Register(s.Rpcs)
 }
 
 ${Calls}
@@ -66,7 +78,7 @@ type Clt struct {
 // Remotized Client using the rpc package as transport
 type Client interface {
 	Bind(*rpc.Client) // Binds this client to a rpc.Client
-	Cfg() *Clt        // Gets a reference to the Clt configurable fields
+	Base() *Clt       // Gets a reference to the base Clt
 }
 
 // Remotized server type
@@ -78,6 +90,7 @@ type Srv struct {
 // Remotized Server using the rpc package as transport
 type Server interface {
 	Bind(*rpc.Server, interface{}) // Binds this server to a rpc.Server
+	Base() *Srv                    // Gets a reference to the base Srv
 }
 
 // Args
@@ -134,7 +147,7 @@ func (c *Clt) Bind(client *rpc.Client) {
 }
 
 // Gets a reference to the Clt configurable fields on Clt itself
-func (c *Clt) Cfg() *Clt {
+func (c *Clt) Base() *Clt {
 	return c
 }
 
@@ -144,18 +157,26 @@ func (s *Srv) Bind(server *rpc.Server, impl interface{}) {
 	s.impl = impl
 }
 
+// Gets a reference to the Base Srv 
+func (s *Srv) Base() *Srv {
+	return s
+}
+
 // Add a remotized type to the registry. The type is Exported since that moment
-func Remotize(ct, st reflect.Type) {
-	name := fmt.Sprintf("%v", t)
+func Register(c, s interface{}) {
+	ct := reflect.Typeof(c)
+	st := reflect.Typeof(s)
+	cname := fmt.Sprintf("%v", ct)
+	sname := fmt.Sprintf("%v", st)
 	lock.Lock()
-	reg[name] = ct
-	reg[name] = st
+	reg[cname] = ct
+	reg[sname] = st
 	fmt.Println("Registry is now", reg)
 	lock.Unlock()
 }
 
 // Remove a type from registry. The type is UnExported since that moment
-func UnRemotize(name string) {
+func Unregister(name string) {
 	lock.Lock()
 	reg[name+"Client"] = nil, false
 	reg[name+"Server"] = nil, false
@@ -200,9 +221,10 @@ func NewClient(client *rpc.Client, i interface{}, pack string) Client {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	c := instantiate(ifacename + "Client")
-	if c != nil {
-		c.(Client).Bind(client)
+	clt := instantiate(ifacename + "Client")
+	if clt != nil {
+		c := clt.(Client)
+		c.Bind(client)
 		return c
 	}
 	return nil
@@ -211,7 +233,7 @@ func NewClient(client *rpc.Client, i interface{}, pack string) Client {
 // NewServer instantiates a server for the given interface,
 // if found on the registry, otherwise nil is returned.
 // It also initiates it with the implementation of that interface
-func NewServer(i, impl interface{}, pack string) *Server {
+func NewServer(server *rpc.Server, i, impl interface{}, pack string) Server {
 	if impl == nil {
 		impl = i
 	}
@@ -220,33 +242,30 @@ func NewServer(i, impl interface{}, pack string) *Server {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	s := instantiate(ifacename + "Server")
-	if s != nil {
-		return s.(Server).Bind(rpc.NewServer(), impl)
+	srv := instantiate(ifacename + "Server")
+	if srv != nil {
+		s := srv.(Server)
+		s.Bind(server, impl)
+		return s
 	}
 	return nil
 }
 
-// Server returns the underlying rpc Server
-func (s *Server) Server() *rpc.Server {
-	return s.server
-}
-
 // Call to a remotized method
-func Call(c *Client, method string, args ...interface{}) (*Results, os.Error) {
+func Call(c *Clt, method string, args ...interface{}) (*Results, os.Error) {
 	var r Results
 	a := &Args{args}
 	var e os.Error
-	if c.timeout == NoTimeout {
+	if c.Timeout == NoTimeout {
 		e = c.client.Call(method, a, &r)
 	} else {
-		e = callTimeout(c, method, a, &r, c.timeout)
+		e = callTimeout(c, method, a, &r, c.Timeout)
 	}
 	return &r, e
 }
 
 // calltimeout calls with a timeout
-func callTimeout(c *Client, method string, args interface{},
+func callTimeout(c *Clt, method string, args interface{},
 reply interface{}, timeout int64) os.Error {
 	call := c.client.Go(method, args, reply, nil)
 	select {
@@ -260,26 +279,13 @@ reply interface{}, timeout int64) os.Error {
 }
 
 // HandleError handles an error
-func HandleError(c *Client, funcname string, e os.Error) {
-	if c.handler != nil {
-		c.handler(funcname, e)
-	} else if DefaultErrorHandling != nil {
-		DefaultErrorHandling(funcname, e)
+func HandleError(c *Clt, funcname string, e os.Error) {
+	if c.Handler != nil {
+		c.Handler(funcname, e)
 	} else {
 		errmsg := fmt.Sprintf("Error at %v(): %v", funcname, e)
 		panic(errmsg)
 	}
-}
-
-// Set remotized interface error handler
-func ErrorHandler(c *Client, f ErrorHandling) {
-	c.handler = f
-}
-
-// Set remotized interface default timeout
-func Timeout(i interface{}, timeout int64) {
-	c := i.(*Client)
-	c.timeout = timeout
 }
 
 // Read from the pipe
@@ -347,7 +353,7 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 	w := &wrapgen{Iface: Ifacename,
 		Pack:    pack,
 		Calls:   bytes.NewBuffer(make([]byte, 0)),
-		imports: []string{"os", "reflect"},
+		imports: []string{"os", "rpc"},
 	}
 	if pack != "remotize" {
 		w.imports = append(w.imports, "remotize")
@@ -436,7 +442,7 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 	if m.Type.NumOut()+len(mi.ptrs) == 0 {
 		r = "_"
 	}
-	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.ToClient(),\"%vServer.RPC%v\",",
+	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.Base(),\"%vRPCs.%v\",",
 		r, w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
@@ -484,7 +490,7 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 	m := mi.m
 	if !mi.re {
 		fmt.Fprintf(w.Calls, "\tif e != nil {\n")
-		fmt.Fprintf(w.Calls, "\t\tHandleError(c.ToClient(),\"%v.%v\", e)\n",
+		fmt.Fprintf(w.Calls, "\t\tHandleError(c.Base(),\"%v.%v\", e)\n",
 			w.Iface, m.Name)
 		fmt.Fprintf(w.Calls, "\t}\n")
 	}
@@ -515,7 +521,7 @@ func (w *wrapgen) serverWrapper() {
 	mi := w.methods[len(w.methods)-1]
 	m := mi.m
 	fmt.Fprintf(w.Calls, "// %v.%v Server wrapper\n", w.Iface, m.Name)
-	fmt.Fprintf(w.Calls, "func (s *%vServer) RPC%v(", w.Iface, m.Name)
+	fmt.Fprintf(w.Calls, "func (s *%vRPCs) %v(", w.Iface, m.Name)
 	fmt.Fprintf(w.Calls, "a *Args, r *Results) os.Error {\n")
 	nout := m.Type.NumOut()
 	ninouts := len(mi.ptrs)
@@ -537,7 +543,7 @@ func (w *wrapgen) serverWrapper() {
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, " = ")
 	}
-	fmt.Fprintf(w.Calls, "s.impl.(%v).%v(", w.Iface, m.Name)
+	fmt.Fprintf(w.Calls, "s.s.impl.(%v).%v(", w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	j := 0
 	for i := 0; i < nin; i++ {

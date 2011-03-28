@@ -45,13 +45,8 @@ type ${Iface}RPCs struct {
 
 // Server wrapper for ${Iface}
 type ${Iface}Server struct {
-	Srv
+	ServerBase
 	Rpcs	*${Iface}RPCs
-}
-
-// Client wrapper for ${Iface}
-type ${Iface}Client struct {
-	${Prefix}Clt
 }
 
 // Bind service
@@ -59,6 +54,22 @@ func (s *${Iface}Server) Bind(server *rpc.Server, impl interface{}) {
 	s.Base().Bind(server,impl)
 	s.Rpcs = &${Iface}RPCs{s}
 	server.Register(s.Rpcs)
+}
+
+// Local Remote Interface reference
+type ${Iface}Remoted struct {
+	c *${Iface}Client
+}
+
+// Client wrapper for ${Iface}
+type ${Iface}Client struct {
+	${Prefix}ClientBase
+}
+
+// Bind client
+func (c *${Iface}Client) Bind(client *rpc.Client) {
+	c.Base().Bind(client)
+	c.remote = &${Iface}Remoted{c}
 }
 
 ${Calls}
@@ -69,20 +80,22 @@ ${Calls}
 type ErrorHandling func(string, os.Error)
 
 // Remotized client type
-type Clt struct {
+type ClientBase struct {
 	client  *rpc.Client   // rpc transport
+	remote  interface{}   // local reference to remote interface
 	Handler ErrorHandling // default error handler
 	Timeout int64         // default rpc max timeout
 }
 
 // Remotized Client using the rpc package as transport
 type Client interface {
-	Bind(*rpc.Client) // Binds this client to a rpc.Client
-	Base() *Clt       // Gets a reference to the base Clt
+	Bind(*rpc.Client)    // Binds this client to a rpc.Client
+	Base() *ClientBase   // Gets a reference to the base ClientBase
+	Remote() interface{} //  Obtain reference to the Remote Interface
 }
 
 // Remotized server type
-type Srv struct {
+type ServerBase struct {
 	server *rpc.Server // rpc server
 	impl   interface{} // iface implementation to be invoked
 }
@@ -90,7 +103,7 @@ type Srv struct {
 // Remotized Server using the rpc package as transport
 type Server interface {
 	Bind(*rpc.Server, interface{}) // Binds this server to a rpc.Server
-	Base() *Srv                    // Gets a reference to the base Srv
+	Base() *ServerBase             // Gets a reference to the base Srv
 }
 
 // Args
@@ -141,24 +154,29 @@ var reg = make(map[string]reflect.Type)
 // Registry's lock
 var lock sync.RWMutex
 
-// Bind associates a Clt Client against a rpc.Client
-func (c *Clt) Bind(client *rpc.Client) {
+// Bind associates a ClientBase Client against a rpc.Client
+func (c *ClientBase) Bind(client *rpc.Client) {
 	c.client = client
 }
 
-// Gets a reference to the Clt configurable fields on Clt itself
-func (c *Clt) Base() *Clt {
+// Gets a reference to the ClientBase configurable fields on ClientBase itself
+func (c *ClientBase) Base() *ClientBase {
 	return c
 }
 
-// Bind associates a Srv Server against a rpc.Server and some implementation
-func (s *Srv) Bind(server *rpc.Server, impl interface{}) {
+// Obtain the local reference to the Remote Interface
+func (c *ClientBase) Remote() interface{} {
+	return c.remote
+}
+
+// Bind associates a ServerBase Server against a rpc.Server and some implementation
+func (s *ServerBase) Bind(server *rpc.Server, impl interface{}) {
 	s.server = server
 	s.impl = impl
 }
 
-// Gets a reference to the Base Srv 
-func (s *Srv) Base() *Srv {
+// Gets a reference to the Base ServerBase 
+func (s *ServerBase) Base() *ServerBase {
 	return s
 }
 
@@ -252,7 +270,7 @@ func NewServer(server *rpc.Server, i, impl interface{}, pack string) Server {
 }
 
 // Call to a remotized method
-func Call(c *Clt, method string, args ...interface{}) (*Results, os.Error) {
+func Call(c *ClientBase, method string, args ...interface{}) (*Results, os.Error) {
 	var r Results
 	a := &Args{args}
 	var e os.Error
@@ -265,7 +283,7 @@ func Call(c *Clt, method string, args ...interface{}) (*Results, os.Error) {
 }
 
 // calltimeout calls with a timeout
-func callTimeout(c *Clt, method string, args interface{},
+func callTimeout(c *ClientBase, method string, args interface{},
 reply interface{}, timeout int64) os.Error {
 	call := c.client.Go(method, args, reply, nil)
 	select {
@@ -279,7 +297,7 @@ reply interface{}, timeout int64) os.Error {
 }
 
 // HandleError handles an error
-func HandleError(c *Clt, funcname string, e os.Error) {
+func HandleError(c *ClientBase, funcname string, e os.Error) {
 	if c.Handler != nil {
 		c.Handler(funcname, e)
 	} else {
@@ -442,7 +460,7 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 	if m.Type.NumOut()+len(mi.ptrs) == 0 {
 		r = "_"
 	}
-	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.Base(),\"%vRPCs.%v\",",
+	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.c.Base(),\"%vRPCs.%v\",",
 		r, w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
@@ -457,7 +475,7 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 // methodSignature generates the client wrapper method signature
 func (w *wrapgen) methodSignature(m reflect.Method) {
 	fmt.Fprintf(w.Calls, "// %v.%v Client wrapper\n", w.Iface, m.Name)
-	fmt.Fprintf(w.Calls, "func (c *%vClient) %v(", w.Iface, m.Name)
+	fmt.Fprintf(w.Calls, "func (c *%vRemoted) %v(", w.Iface, m.Name)
 	nin := m.Type.NumIn()
 	for i := 0; i < nin; i++ {
 		if i > 0 {
@@ -490,7 +508,7 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 	m := mi.m
 	if !mi.re {
 		fmt.Fprintf(w.Calls, "\tif e != nil {\n")
-		fmt.Fprintf(w.Calls, "\t\tHandleError(c.Base(),\"%v.%v\", e)\n",
+		fmt.Fprintf(w.Calls, "\t\tHandleError(c.c.Base(),\"%v.%v\", e)\n",
 			w.Iface, m.Name)
 		fmt.Fprintf(w.Calls, "\t}\n")
 	}

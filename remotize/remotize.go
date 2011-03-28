@@ -8,6 +8,7 @@ package remotize
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -140,6 +141,11 @@ type wrapgen struct {
 	Calls   *bytes.Buffer
 	imports []string
 	methods []methodInfo
+}
+
+// Remotizer
+type remotizer struct {
+	ifaces []string
 }
 
 // Pipe for local invocations, parent/child comms
@@ -331,9 +337,55 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 	return &Pipe{in, out}
 }
 
-// Remotize will create the rpc client/server file needed to use some given 
+// Remotize marks an interface to be remotized by Autoremotize
+func Remotize(name string) {
+	// nothing to do, just an annotation
+}
+
+// Remotizer visits a ast node
+func (r *remotizer) Visit(node ast.Node) ast.Visitor {
+	fn, ok := node.(*ast.CallExpr)
+	if ok {
+		id, ok := fn.Fun.(*ast.Ident)
+		if ok {
+			if id.Name == "Remotize" {
+				for _, a := range fn.Args {
+					bl, ok := a.(*ast.BasicLit)
+					if ok && bl.Kind == token.STRING {
+						val := (string)(bl.Value)
+						val = strings.Replace(val, "\"", "", -1)
+						val = strings.Replace(val, "'", "", -1)
+						val = strings.Replace(val, "`", "", -1)
+						r.ifaces = append(r.ifaces, val)
+					}
+				}
+			}
+		}
+	}
+	return r
+}
+
+// Autoremotize will remotize all interfaces in where Remotize is call amongst
+// the given list of "files" in their common "path"
+func Autoremotize(path string, files []string) (int, os.Error) {
+	done := 0
+	fset := token.NewFileSet()
+	for _, f := range files {
+		filename := path + "/" + f
+		file, e := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+		if e != nil {
+			return done, e
+		}
+		rem := &remotizer{}
+		ast.Walk(rem, file)
+		fmt.Println("remotizer", rem)
+	}
+	return done, nil
+}
+
+// RemotizeNow will create the rpc client/server file needed to use some given 
 // interface remotely
-func Remotize(iface interface{}) {
+func RemotizeNow(iface interface{}) {
 	if it, ok := iface.(*reflect.InterfaceType); ok {
 		remotize(it, "")
 		return

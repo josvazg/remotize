@@ -340,15 +340,15 @@ ${Imports}
 )
 
 var toremotize = []struct {
-	iface		interface
+	iface		interface{}
 	position	*token.Position	
 }{
 ${RemotizeList}
 }
 
 func main() {
-	for _,r range toremotize {
-		Remotize(r.iface)
+	for _,r := range toremotize {
+		remotize.Remotize(r.iface)
 		e:=recover()
 		if(e!=nil) {
 			msg:=fmt.Sprintf("Error remotizing %v: '%v' at %v",
@@ -359,12 +359,11 @@ func main() {
 }
 `
 
-// autoremotize context
-type autoremotize struct {
+// remotize spec
+type remotizeSpec struct {
 	currpack      string
 	importAliases map[string]string
-	ifaces        []string
-	positions     []token.Position
+	items         map[string]*token.Position
 	fset          *token.FileSet
 	Imports       *bytes.Buffer
 	RemotizeList  *bytes.Buffer
@@ -384,9 +383,9 @@ func empty(s string) bool {
 	return len(s) == 0 || s == "//" || s == "*/"
 }
 
-func fixPack(r *autoremotize, name string) string {
+func fixPack(r *remotizeSpec, name string) string {
 	if !strings.Contains(name, ".") {
-		return name
+		return r.currpack + "." + name
 	}
 	parts := strings.Split(name, ".", -1)
 	alias := r.importAliases[parts[0]]
@@ -396,8 +395,8 @@ func fixPack(r *autoremotize, name string) string {
 	return alias + "." + parts[1]
 }
 
-func parseRemotizeCalls(r *autoremotize, decl *ast.GenDecl) {
-	call, ok := decl.(*ast.CallExpr)
+func parseRemotizeCalls(r *remotizeSpec, decl ast.Decl) {
+	call, ok := (interface{})(decl).(*ast.CallExpr)
 	if !ok {
 		return
 	}
@@ -429,7 +428,7 @@ func parseRemotizeCalls(r *autoremotize, decl *ast.GenDecl) {
 	if len(call.Args) < (argpos+1) || call.Args[argpos] == nil {
 		return
 	}
-	subcall, ok := call.Args[pos].(*ast.CallExpr)
+	subcall, ok := call.Args[argpos].(*ast.CallExpr)
 	if !ok {
 		return
 	}
@@ -444,11 +443,15 @@ func parseRemotizeCalls(r *autoremotize, decl *ast.GenDecl) {
 	if !ok {
 		return
 	}
-	r.ifaces = append(r.ifaces, fixPack(id.Name))
-	r.positions = append(r.positions, r.fset.Position(id.Pos()))
+	pos := r.fset.Position(id.Pos())
+	r.items[fixPack(r, id.Name)] = &pos
 }
 
-func parseComment(r *autoremotize, decl *ast.GenDecl) {
+func parseComment(r *remotizeSpec, idecl ast.Decl) {
+	decl, ok := (interface{})(idecl).(*ast.GenDecl)
+	if !ok {
+		return
+	}
 	if decl.Doc == nil {
 		return
 	}
@@ -470,74 +473,77 @@ func parseComment(r *autoremotize, decl *ast.GenDecl) {
 	if i >= 0 {
 		cmt := decl.Doc.List[i]
 		c := string(cmt.Text)
-		pos := r.fset.Position(cmt.Pos())
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
-			for _, iface := range r.ifaces {
-				if iface == name {
-					return r
-				}
+			if _, ok := r.items[name]; ok {
+				return
 			}
-			r.ifaces = append(r.ifaces, name)
-			r.positions = append(r.positions, pos)
+			pos := r.fset.Position(cmt.Pos())
+			r.items[name] = &pos
 		}
 	}
 }
 
-func parseRemotizeDemands(r *autoremotize, file *ast.File) {
+func parseRemotizeDemands(r *remotizeSpec, file *ast.File) {
 	for _, decl := range file.Decls {
 		parseComment(r, decl)
 		parseRemotizeCalls(r, decl)
 	}
 }
 
-func parseImports(r *autoremotize, file *ast.File) {
+func parseImports(r *remotizeSpec, file *ast.File) {
 	r.importAliases = make(map[string]string)
 	for _, decl := range file.Decls {
-		imp, ok := decl.(*ast.ImportSpec)
+		imp, ok := (interface{})(decl).(*ast.ImportSpec)
 		if !ok || imp.Name == nil {
 			continue
 		}
 		path := strings.Trim(imp.Path.Value, "\"")
 		if strings.Contains(path, "/") {
-			parts := path.strings.Split(path, "/", -1)
+			parts := strings.Split(path, "/", -1)
 			path = parts[len(parts)-1]
 		}
-		r.importAliases[path] = imp.Name
+		r.importAliases[path] = imp.Name.Name
 	}
 }
 
-func parseFile(r *autoremotize, file *ast.File) {
+func parseFile(r *remotizeSpec, file *ast.File) {
 	r.currpack = file.Name.Name
 	parseImports(r, file)
 	parseRemotizeDemands(r, file)
 }
 
-func (r *autoremotize) build() os.Error {
-	imports := []string{"go/token", "reflect"}
+func build(r *remotizeSpec) os.Error {
+	imports := []string{"go/token", "reflect", "remotize"}
 	sort.SortStrings(imports)
 	r.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range imports {
 		fmt.Fprintf(r.Imports, "\"%v\"\n", s)
 	}
 	src := bytes.NewBuffer(make([]byte, 0))
+	r.RemotizeList = bytes.NewBuffer(make([]byte, 0))
 	t := template.New(nil)
 	t.SetDelims("${", "}")
-	e := t.Parse(wrapsrc)
+	e := t.Parse(autoremotizer)
 	if e != nil {
 		return e
 	}
+	for name, pos := range r.items {
+		fmt.Fprintf(r.RemotizeList, "{%v, &Position{\"%v\",%v,%v,%v}},",
+			name, pos.Filename, pos.Offset, pos.Line, pos.Column)
+	}
 	t.Execute(src, r)
 	fset := token.NewFileSet()
-	filename := strings.ToLower("_AutoRemotized.go")
+	filename := "_autoremotized.go"
 	f, e := parser.ParseFile(fset, filename, src, parser.ParseComments)
 	if e != nil {
+		fmt.Println(src)
 		return e
 	}
 	fos, e := os.Create(filename)
 	if e != nil {
 		return e
 	}
-	pcfg := &printer.Config{printer.TabIndent, 4}
+	pcfg := &printer.Config{printer.TabIndent, 2}
 	pcfg.Fprint(fos, fset, f)
 	fos.Close()
 	return nil
@@ -547,26 +553,31 @@ func (r *autoremotize) build() os.Error {
 // the given list of "files" in their common "path"
 func Autoremotize(path string, files []string) (int, os.Error) {
 	done := 0
-	ar := &autoremotize{}
-	ar.fset = token.NewFileSet()
+	rs := &remotizeSpec{}
+	rs.fset = token.NewFileSet()
+	rs.items = make(map[string]*token.Position)
 	for _, f := range files {
 		filename := path + "/" + f
-		file, e := parser.ParseFile(ar.fset, filename, nil, parser.ParseComments)
+		file, e := parser.ParseFile(rs.fset, filename, nil, parser.ParseComments)
 		if e != nil {
 			return done, e
 		}
-		parseFile(ar, file)
+		parseFile(rs, file)
 		//ast.Print(ar.fset, file)
 	}
-	if len(ar.ifaces) == 0 {
+	items := len(rs.items)
+	if items == 0 {
 		fmt.Println("No interfaces found to remotize")
 		return done, nil
 	}
-	fmt.Printf("Found %v interfaces to remotize:\n", len(ar.ifaces))
-	for i := 0; i < len(ar.ifaces); i++ {
-		fmt.Println(ar.ifaces[i], "at", ar.positions[i])
+	fmt.Printf("Found %v interfaces to remotize:\n", items)
+	for name, pos := range rs.items {
+		fmt.Println(name, "at", pos)
 	}
-	ar.build()
+	e := build(rs)
+	if e != nil {
+		fmt.Println("Error:", e)
+	}
 	return done, nil
 }
 

@@ -602,7 +602,7 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 			return done, e
 		}
 		parseFile(rs, file)
-		//ast.Print(ar.fset, file)
+		//ast.Print(rs.fset, file)
 	}
 	items := len(rs.items)
 	if items == 0 {
@@ -623,22 +623,52 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 // Remotize will create the rpc client/server file needed to use some given 
 // interface remotely
 func Remotize(iface interface{}) os.Error {
+	src, ok := (iface).(*ast.TypeSpec)
+	if ok {
+		_, ok := (src.Type).(*ast.InterfaceType)
+		if ok {
+			return remotizeSource(src)
+		}
+	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
-		return remotize(it, "")
+		return remotizeType(it, "")
 	}
 	t := reflect.TypeOf(iface)
 	if pt := t; pt.Kind() == reflect.Ptr {
 		if it := pt.Elem(); it.Kind() == reflect.Interface {
-			return remotize(it, "")
+			return remotizeType(it, "")
 		}
 	}
 	msg := fmt.Sprintln("Can't remotize %v of non interface type %v", iface, t)
 	return os.NewError(msg)
 }
 
-// remotize will remotize the interface by generating a proper rpc client/server
-// wrapping
-func remotize(it reflect.Type, pack string) os.Error {
+// remotizeSource will remotize the interface FROM Source code by generating 
+// the proper rpc client/server wrapping
+func remotizeSource(ts *ast.TypeSpec) os.Error {
+	fmt.Println("Remotizing interface", ts.Name.Name)
+
+	is, ok := (ts.Type).(*ast.InterfaceType)
+	if !ok {
+		msg := fmt.Sprintln("Can't remotize %v of non interface source %v",
+			ts.Name.Name, is)
+		return os.NewError(msg)
+	}
+	w := newWrapgen(ts.Name.Name, "")
+
+	nm := len(is.Methods.List)
+	fmt.Println("Interface exports", nm, "methods")
+	for i := 0; i < nm; i++ {
+		m := is.Methods.List[i]
+		ast.Print(token.NewFileSet(), m)
+		//w.addMethod(m)
+	}
+	return w.genWrapper(ts.Name.Name)
+}
+
+// remotizeType will remotize the interface FROM Runtime Type by generating 
+// the proper rpc client/server wrapping
+func remotizeType(it reflect.Type, pack string) os.Error {
 	fmt.Println("Remotizing interface", it)
 	if pack == "" {
 		pack = it.PkgPath()
@@ -651,7 +681,7 @@ func remotize(it reflect.Type, pack string) os.Error {
 		m := it.Method(i)
 		w.addMethod(m)
 	}
-	return w.genWrapper(it)
+	return w.genWrapper(it.Name())
 }
 
 // newWrapgen creates an interface wrapper generator
@@ -670,7 +700,7 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 	return w
 }
 
-// addMethod wraps another method fo the interface
+// addMethod wraps another method from the interface
 func (w *wrapgen) addMethod(m reflect.Method) {
 	re, pos := returnsError(m)
 	ptrs := inouts(m)
@@ -701,7 +731,7 @@ func (w *wrapgen) addImport(imp string) {
 }
 
 // genWrapper generates the final source code for the wrapped interface
-func (w *wrapgen) genWrapper(it reflect.Type) os.Error {
+func (w *wrapgen) genWrapper(name string) os.Error {
 	sort.SortStrings(w.imports)
 	w.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range w.imports {
@@ -716,7 +746,7 @@ func (w *wrapgen) genWrapper(it reflect.Type) os.Error {
 	}
 	t.Execute(src, w)
 	fset := token.NewFileSet()
-	filename := strings.ToLower(it.Name()) + "Remotized.go"
+	filename := strings.ToLower(name) + "Remotized.go"
 	f, e := parser.ParseFile(fset, filename, src, parser.ParseComments)
 	if e != nil {
 		return e

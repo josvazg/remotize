@@ -70,7 +70,7 @@ func TestRemotize(t *test.T) {
 		return
 	}
 	fmt.Println(n, "remotized")
-	//RemotizeNow(new(Calc))
+	Remotize(new(Calc))
 }
 
 func TestRemotized(t *test.T) {

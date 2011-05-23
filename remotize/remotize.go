@@ -125,11 +125,41 @@ type Timedout struct {
 
 // method specification
 type methodSpec interface {
-	Name() string
+	MethodName() string
 	NumIn() int
-	In(int) string
+	InName(int) string
+	InElem(int) string
 	NumOut() int
-	Out(int) string
+	OutName(int) string
+	//OutElem(int) string
+}
+
+type rtMethodSpec struct {
+	reflect.Method
+}
+
+func (m rtMethodSpec) MethodName() string {
+	return m.Name
+}
+
+func (m rtMethodSpec) NumIn() int {
+	return m.Type.NumIn()
+}
+
+func (m rtMethodSpec) InName(i int) string {
+	return m.Type.In(i).String()
+}
+
+func (m rtMethodSpec) InElem(i int) string {
+	return m.Type.In(i).Elem().String()
+}
+
+func (m rtMethodSpec) NumOut() int {
+	return m.Type.NumOut()
+}
+
+func (m rtMethodSpec) OutName(i int) string {
+	return m.Type.Out(i).String()
 }
 
 // methodInfo for code generation
@@ -224,7 +254,7 @@ func instantiate(name string) interface{} {
 	if t == nil {
 		return nil
 	}
-	return reflect.Zero(t).Addr().Interface()
+	return reflect.New(t).Interface()
 }
 
 // named returns the name of the given underliying type. Pointers are followed
@@ -616,7 +646,7 @@ func remotize(it reflect.Type, pack string) os.Error {
 	w := newWrapgen(it.Name(), pack)
 
 	nm := it.NumMethod()
-	fmt.Println("Interface exports ", nm, "methods")
+	fmt.Println("Interface exports", nm, "methods")
 	for i := 0; i < nm; i++ {
 		m := it.Method(i)
 		w.addMethod(m)
@@ -652,7 +682,7 @@ func (w *wrapgen) addMethod(m reflect.Method) {
 	for i := 0; i < nout; i++ {
 		w.addImport(m.Type.Out(i).PkgPath())
 	}
-	w.methods = append(w.methods, methodInfo{(m.Type).(methodSpec), re, pos, ptrs})
+	w.methods = append(w.methods, methodInfo{rtMethodSpec{m}, re, pos, ptrs})
 	w.clientWrapper()
 	w.serverWrapper()
 }
@@ -695,7 +725,7 @@ func (w *wrapgen) genWrapper(it reflect.Type) os.Error {
 	if e != nil {
 		return e
 	}
-	pcfg := &printer.Config{printer.TabIndent, 4}
+	pcfg := &printer.Config{printer.TabIndent, 1}
 	pcfg.Fprint(fos, fset, f)
 	fos.Close()
 	return nil
@@ -719,7 +749,7 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 		r = "_"
 	}
 	fmt.Fprintf(w.Calls, "\t%v, e := Call(c.c.Base(),\"%vRPCs.%v\",",
-		r, w.Iface, m.Name())
+		r, w.Iface, m.MethodName())
 	nin := m.NumIn()
 	for i := 0; i < nin; i++ {
 		if i > 0 {
@@ -732,14 +762,14 @@ func (w *wrapgen) wrapCall(mi methodInfo) {
 
 // methodSignature generates the client wrapper method signature
 func (w *wrapgen) methodSignature(m methodSpec) {
-	fmt.Fprintf(w.Calls, "// %v.%v Client wrapper\n", w.Iface, m.Name())
-	fmt.Fprintf(w.Calls, "func (c *%vRemoted) %v(", w.Iface, m.Name())
+	fmt.Fprintf(w.Calls, "// %v.%v Client wrapper\n", w.Iface, m.MethodName())
+	fmt.Fprintf(w.Calls, "func (c *%vRemoted) %v(", w.Iface, m.MethodName())
 	nin := m.NumIn()
 	for i := 0; i < nin; i++ {
 		if i > 0 {
 			fmt.Fprintf(w.Calls, ",")
 		}
-		fmt.Fprintf(w.Calls, "a%v %v", (i + 1), m.In(i))
+		fmt.Fprintf(w.Calls, "a%v %v", (i + 1), m.InName(i))
 	}
 	fmt.Fprintf(w.Calls, ")")
 	nout := m.NumOut()
@@ -752,7 +782,7 @@ func (w *wrapgen) methodSignature(m methodSpec) {
 			if i > 0 {
 				fmt.Fprintf(w.Calls, ",")
 			}
-			fmt.Fprintf(w.Calls, "%v", m.Out(i))
+			fmt.Fprintf(w.Calls, "%v", m.OutName(i))
 		}
 		if nout > 1 {
 			fmt.Fprintf(w.Calls, ") ")
@@ -767,14 +797,14 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 	if !mi.re {
 		fmt.Fprintf(w.Calls, "\tif e != nil {\n")
 		fmt.Fprintf(w.Calls, "\t\tHandleError(c.c.Base(),\"%v.%v\", e)\n",
-			w.Iface, m.Name())
+			w.Iface, m.MethodName())
 		fmt.Fprintf(w.Calls, "\t}\n")
 	}
 	nout := m.NumOut()
 	ninouts := len(mi.ptrs)
 	for i := 0; i < ninouts; i++ {
 		fmt.Fprintf(w.Calls, "\t*a%v=(r.R[%v]).(%v)\n", mi.ptrs[i]+1, nout+i,
-			m.In(mi.ptrs[i]))
+			m.InElem(mi.ptrs[i]))
 	}
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, "\treturn ")
@@ -785,7 +815,7 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 			if i == mi.pos {
 				fmt.Fprintf(w.Calls, "e")
 			} else {
-				fmt.Fprintf(w.Calls, "(r.R[%v]).(%v)", i, m.Out(i))
+				fmt.Fprintf(w.Calls, "(r.R[%v]).(%v)", i, m.OutName(i))
 			}
 		}
 		fmt.Fprintf(w.Calls, "\n")
@@ -796,8 +826,8 @@ func (w *wrapgen) clientReturn(mi methodInfo) {
 func (w *wrapgen) serverWrapper() {
 	mi := w.methods[len(w.methods)-1]
 	m := mi.m
-	fmt.Fprintf(w.Calls, "// %v.%v Server wrapper\n", w.Iface, m.Name())
-	fmt.Fprintf(w.Calls, "func (s *%vRPCs) %v(", w.Iface, m.Name())
+	fmt.Fprintf(w.Calls, "// %v.%v Server wrapper\n", w.Iface, m.MethodName())
+	fmt.Fprintf(w.Calls, "func (s *%vRPCs) %v(", w.Iface, m.MethodName())
 	fmt.Fprintf(w.Calls, "a *Args, r *Results) os.Error {\n")
 	nout := m.NumOut()
 	ninouts := len(mi.ptrs)
@@ -806,7 +836,7 @@ func (w *wrapgen) serverWrapper() {
 	}
 	for i := 0; i < ninouts; i++ {
 		fmt.Fprintf(w.Calls, "\ta%v := (a.A[%v]).(%v)\n", mi.ptrs[i]+1, nout+i,
-			m.In(mi.ptrs[i]))
+			m.InElem(mi.ptrs[i]))
 		fmt.Fprintf(w.Calls, "\tr.R[%v] = &a%v\n", nout+i, mi.ptrs[i]+1)
 	}
 	fmt.Fprintf(w.Calls, "\t")
@@ -819,7 +849,7 @@ func (w *wrapgen) serverWrapper() {
 	if nout > 0 {
 		fmt.Fprintf(w.Calls, " = ")
 	}
-	fmt.Fprintf(w.Calls, "s.s.impl.(%v).%v(", w.Iface, m.Name())
+	fmt.Fprintf(w.Calls, "s.s.impl.(%v).%v(", w.Iface, m.MethodName())
 	nin := m.NumIn()
 	j := 0
 	for i := 0; i < nin; i++ {
@@ -827,10 +857,10 @@ func (w *wrapgen) serverWrapper() {
 			fmt.Fprintf(w.Calls, ", ")
 		}
 		if j < ninouts && i == mi.ptrs[j] {
-			fmt.Fprintf(w.Calls, "(r.R[%v]).(%v)", nout+j, m.In(mi.ptrs[i]))
+			fmt.Fprintf(w.Calls, "(r.R[%v]).(%v)", nout+j, m.InName(mi.ptrs[i]))
 			j++
 		} else {
-			fmt.Fprintf(w.Calls, "(a.A[%v]).(%v)", i, m.In(i))
+			fmt.Fprintf(w.Calls, "(a.A[%v]).(%v)", i, m.InName(i))
 		}
 	}
 	fmt.Fprintf(w.Calls, ")\n")

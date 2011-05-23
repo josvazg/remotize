@@ -123,44 +123,6 @@ type Timedout struct {
 	Call *rpc.Call
 }
 
-// method specification
-type methodSpec interface {
-	MethodName() string
-	NumIn() int
-	InName(int) string
-	InElem(int) string
-	NumOut() int
-	OutName(int) string
-	//OutElem(int) string
-}
-
-type rtMethodSpec struct {
-	reflect.Method
-}
-
-func (m rtMethodSpec) MethodName() string {
-	return m.Name
-}
-
-func (m rtMethodSpec) NumIn() int {
-	return m.Type.NumIn()
-}
-
-func (m rtMethodSpec) InName(i int) string {
-	return m.Type.In(i).String()
-}
-
-func (m rtMethodSpec) InElem(i int) string {
-	return m.Type.In(i).Elem().String()
-}
-
-func (m rtMethodSpec) NumOut() int {
-	return m.Type.NumOut()
-}
-
-func (m rtMethodSpec) OutName(i int) string {
-	return m.Type.Out(i).String()
-}
 
 // methodInfo for code generation
 type methodInfo struct {
@@ -627,61 +589,112 @@ func Remotize(iface interface{}) os.Error {
 	if ok {
 		_, ok := (src.Type).(*ast.InterfaceType)
 		if ok {
-			return remotizeSource(src)
+			return remotize(srcIfaceSpec{src}, "")
 		}
 	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
-		return remotizeType(it, "")
+		return remotize(rtIfaceSpec{it}, "")
 	}
 	t := reflect.TypeOf(iface)
 	if pt := t; pt.Kind() == reflect.Ptr {
 		if it := pt.Elem(); it.Kind() == reflect.Interface {
-			return remotizeType(it, "")
+			return remotize(rtIfaceSpec{it}, "")
 		}
 	}
 	msg := fmt.Sprintln("Can't remotize %v of non interface type %v", iface, t)
 	return os.NewError(msg)
 }
 
-// remotizeSource will remotize the interface FROM Source code by generating 
-// the proper rpc client/server wrapping
-func remotizeSource(ts *ast.TypeSpec) os.Error {
-	fmt.Println("Remotizing interface", ts.Name.Name)
-
-	is, ok := (ts.Type).(*ast.InterfaceType)
-	if !ok {
-		msg := fmt.Sprintln("Can't remotize %v of non interface source %v",
-			ts.Name.Name, is)
-		return os.NewError(msg)
-	}
-	w := newWrapgen(ts.Name.Name, "")
-
-	nm := len(is.Methods.List)
-	fmt.Println("Interface exports", nm, "methods")
-	for i := 0; i < nm; i++ {
-		m := is.Methods.List[i]
-		ast.Print(token.NewFileSet(), m)
-		//w.addMethod(m)
-	}
-	return w.genWrapper(ts.Name.Name)
+// interface specficication
+type ifaceSpec interface {
+	Name() string
+	PkgPath() string
+	NumMethod() int
+	MethodSpec(int) methodSpec
 }
 
-// remotizeType will remotize the interface FROM Runtime Type by generating 
-// the proper rpc client/server wrapping
-func remotizeType(it reflect.Type, pack string) os.Error {
-	fmt.Println("Remotizing interface", it)
-	if pack == "" {
-		pack = it.PkgPath()
-	}
-	w := newWrapgen(it.Name(), pack)
+// runtime interface specification
+type rtIfaceSpec struct {
+	reflect.Type
+}
 
-	nm := it.NumMethod()
+func (is rtIfaceSpec) MethodSpec(i int) methodSpec {
+	return srcMethodSpec{is.Type.Methods.List[i]}
+}
+
+// source interface specification
+type srcIfaceSpec struct {
+	*ast.TypeSpec
+}
+
+func (is srcIfaceSpec) Name() string {
+	return is.Name
+}
+
+func (is srcIfaceSpec) MethodSpec(i int) methodSpec {
+	return srcMethodSpec{is.Method(i)}
+}
+
+// method specification
+type methodSpec interface {
+	MethodName() string
+	NumIn() int
+	InName(int) string
+	InElem(int) string
+	NumOut() int
+	OutName(int) string
+}
+
+// runtime method specification
+type rtMethodSpec struct {
+	reflect.Method
+}
+
+func (m rtMethodSpec) MethodName() string {
+	return m.Name
+}
+
+func (m rtMethodSpec) NumIn() int {
+	return m.Type.NumIn()
+}
+
+func (m rtMethodSpec) InName(i int) string {
+	return m.Type.In(i).String()
+}
+
+func (m rtMethodSpec) InElem(i int) string {
+	return m.Type.In(i).Elem().String()
+}
+
+func (m rtMethodSpec) NumOut() int {
+	return m.Type.NumOut()
+}
+
+func (m rtMethodSpec) OutName(i int) string {
+	return m.Type.Out(i).String()
+}
+
+// source method specification
+type srcMethodSpec struct {
+	*ast.Method
+}
+
+// remotize will remotize the interface by generating 
+// the proper rpc client/server wrapping
+func remotize(is ifaceSpec, pack string) os.Error {
+	fmt.Println("Remotizing interface", is.Name())
+	if pack == "" {
+		pack = is.PkgPath()
+	}
+	w := newWrapgen(is.Name(), pack)
+
+	nm := is.NumMethod()
 	fmt.Println("Interface exports", nm, "methods")
 	for i := 0; i < nm; i++ {
-		m := it.Method(i)
+		m := is.MethodSpec(i)
 		w.addMethod(m)
 	}
-	return w.genWrapper(it.Name())
+	return w.genWrapper(is.Name())
 }
 
 // newWrapgen creates an interface wrapper generator
@@ -701,7 +714,7 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 }
 
 // addMethod wraps another method from the interface
-func (w *wrapgen) addMethod(m reflect.Method) {
+func (w *wrapgen) addMethod(m methodSpec) {
 	re, pos := returnsError(m)
 	ptrs := inouts(m)
 	nin := m.Type.NumIn()
@@ -712,7 +725,7 @@ func (w *wrapgen) addMethod(m reflect.Method) {
 	for i := 0; i < nout; i++ {
 		w.addImport(m.Type.Out(i).PkgPath())
 	}
-	w.methods = append(w.methods, methodInfo{rtMethodSpec{m}, re, pos, ptrs})
+	w.methods = append(w.methods, methodInfo{m, re, pos, ptrs})
 	w.clientWrapper()
 	w.serverWrapper()
 }

@@ -587,9 +587,9 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 func Remotize(iface interface{}) os.Error {
 	src, ok := (iface).(*ast.TypeSpec)
 	if ok {
-		_, ok := (src.Type).(*ast.InterfaceType)
+		it, ok := (src.Type).(*ast.InterfaceType)
 		if ok {
-			return remotize(srcIfaceSpec{src}, "")
+			return remotize(srcIfaceSpec{src.Name.Name, it}, "")
 		}
 	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
@@ -619,20 +619,35 @@ type rtIfaceSpec struct {
 }
 
 func (is rtIfaceSpec) MethodSpec(i int) methodSpec {
-	return srcMethodSpec{is.Type.Methods.List[i]}
+	return rtMethodSpec{is.Method(i)}
 }
 
 // source interface specification
 type srcIfaceSpec struct {
-	*ast.TypeSpec
+	name string
+	*ast.InterfaceType
 }
 
 func (is srcIfaceSpec) Name() string {
-	return is.Name
+	return is.name
+}
+
+func (is srcIfaceSpec) PkgPath() string {
+	return ""
+}
+
+func (is srcIfaceSpec) NumMethod() int {
+	return len(is.Methods.List)
 }
 
 func (is srcIfaceSpec) MethodSpec(i int) methodSpec {
-	return srcMethodSpec{is.Method(i)}
+	m := is.Methods.List[i]
+	f, ok := (m.Type).(*ast.FuncType)
+	if !ok {
+		msg := fmt.Sprintln("%v not a FuncType as expected!", m.Type)
+		panic(msg)
+	}
+	return srcMethodSpec{m.Names[0].Name, f}
 }
 
 // method specification
@@ -676,7 +691,32 @@ func (m rtMethodSpec) OutName(i int) string {
 
 // source method specification
 type srcMethodSpec struct {
-	*ast.Method
+	name string
+	*ast.FuncType
+}
+
+func (m srcMethodSpec) MethodName() string {
+	return m.name
+}
+
+func (m srcMethodSpec) NumIn() int {
+	return len(m.Params.List)
+}
+
+func (m srcMethodSpec) InName(i int) string {
+	return (interface{})(m.Params.List[i]).(*ast.Ident).Name
+}
+
+func (m srcMethodSpec) InElem(i int) string {
+	return m.Type.In(i).Elem().String()
+}
+
+func (m srcMethodSpec) NumOut() int {
+	return len(m.Results.List)
+}
+
+func (m srcMethodSpec) OutName(i int) string {
+	return (interface{})(m.Results.List[i]).(*ast.Ident).Name
 }
 
 // remotize will remotize the interface by generating 

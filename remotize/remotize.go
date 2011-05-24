@@ -619,7 +619,7 @@ type rtIfaceSpec struct {
 }
 
 func (is rtIfaceSpec) MethodSpec(i int) methodSpec {
-	return rtMethodSpec{is.Method(i)}
+	return rtMethodSpec{is.Method(i), nil}
 }
 
 // source interface specification
@@ -642,12 +642,7 @@ func (is srcIfaceSpec) NumMethod() int {
 
 func (is srcIfaceSpec) MethodSpec(i int) methodSpec {
 	m := is.Methods.List[i]
-	f, ok := (m.Type).(*ast.FuncType)
-	if !ok {
-		msg := fmt.Sprintln("%v not a FuncType as expected!", m.Type)
-		panic(msg)
-	}
-	return srcMethodSpec{m.Names[0].Name, f}
+	return srcMethodSpec{m.Names[0].Name, (m.Type).(*ast.FuncType)}
 }
 
 // method specification
@@ -656,13 +651,18 @@ type methodSpec interface {
 	NumIn() int
 	InName(int) string
 	InElem(int) string
+	InPkg(int) string
+	InIsPtr(int) bool
 	NumOut() int
 	OutName(int) string
+	OutPkg(int) string
+	OutIsError(int) bool
 }
 
 // runtime method specification
 type rtMethodSpec struct {
 	reflect.Method
+	errorType reflect.Type
 }
 
 func (m rtMethodSpec) MethodName() string {
@@ -681,6 +681,14 @@ func (m rtMethodSpec) InElem(i int) string {
 	return m.Type.In(i).Elem().String()
 }
 
+func (m rtMethodSpec) InPkg(i int) string {
+	return m.Type.In(i).PkgPath()
+}
+
+func (m rtMethodSpec) InIsPtr(i int) bool {
+	return m.Type.In(i).Kind() == reflect.Ptr
+}
+
 func (m rtMethodSpec) NumOut() int {
 	return m.Type.NumOut()
 }
@@ -688,6 +696,18 @@ func (m rtMethodSpec) NumOut() int {
 func (m rtMethodSpec) OutName(i int) string {
 	return m.Type.Out(i).String()
 }
+
+func (m rtMethodSpec) OutPkg(i int) string {
+	return m.Type.Out(i).PkgPath()
+}
+
+func (m rtMethodSpec) OutIsError(i int) bool {
+	if m.errorType == nil {
+		m.errorType = reflect.TypeOf((*os.Error)(nil)).Elem()
+	}
+	return m.Type.Out(i) == m.errorType
+}
+
 
 // source method specification
 type srcMethodSpec struct {
@@ -703,12 +723,42 @@ func (m srcMethodSpec) NumIn() int {
 	return len(m.Params.List)
 }
 
+func solveName(e interface{}) string {
+	switch (e).(type) {
+	case *ast.Ident:
+		return (interface{})(e).(*ast.Ident).Name
+	case *ast.StarExpr:
+		return "*" + solveName((interface{})(e).(*ast.StarExpr).X)
+	case *ast.SelectorExpr:
+		se := (interface{})(e).(*ast.SelectorExpr)
+		return solveName(se.X) + "." + se.Sel.Name
+	}
+	return ""
+}
+
 func (m srcMethodSpec) InName(i int) string {
-	return (interface{})(m.Params.List[i]).(*ast.Ident).Name
+	return solveName(m.Params.List[i])
 }
 
 func (m srcMethodSpec) InElem(i int) string {
-	return m.Type.In(i).Elem().String()
+	s := m.InName(i)
+	if strings.Index(s, "*") == 0 {
+		return s[1:]
+	}
+	return s
+}
+
+func (m srcMethodSpec) InPkg(i int) string {
+	s := m.InName(i)
+	if i := strings.Index(s, "."); i > 0 {
+		return s[0:i]
+	}
+	return ""
+}
+
+func (m srcMethodSpec) InIsPtr(i int) bool {
+	s := m.InName(i)
+	return strings.Index(s, "*") == 0
 }
 
 func (m srcMethodSpec) NumOut() int {
@@ -716,7 +766,19 @@ func (m srcMethodSpec) NumOut() int {
 }
 
 func (m srcMethodSpec) OutName(i int) string {
-	return (interface{})(m.Results.List[i]).(*ast.Ident).Name
+	return solveName(m.Results.List[i])
+}
+
+func (m srcMethodSpec) OutPkg(i int) string {
+	s := m.OutName(i)
+	if i := strings.Index(s, "."); i > 0 {
+		return s[0:i]
+	}
+	return ""
+}
+
+func (m srcMethodSpec) OutIsError(i int) bool {
+	return m.OutName(i) == "os.Error"
 }
 
 // remotize will remotize the interface by generating 
@@ -757,13 +819,13 @@ func newWrapgen(Ifacename, pack string) *wrapgen {
 func (w *wrapgen) addMethod(m methodSpec) {
 	re, pos := returnsError(m)
 	ptrs := inouts(m)
-	nin := m.Type.NumIn()
+	nin := m.NumIn()
 	for i := 0; i < nin; i++ {
-		w.addImport(m.Type.In(i).PkgPath())
+		w.addImport(m.InPkg(i))
 	}
-	nout := m.Type.NumOut()
+	nout := m.NumOut()
 	for i := 0; i < nout; i++ {
-		w.addImport(m.Type.Out(i).PkgPath())
+		w.addImport(m.OutPkg(i))
 	}
 	w.methods = append(w.methods, methodInfo{m, re, pos, ptrs})
 	w.clientWrapper()
@@ -957,11 +1019,10 @@ func (w *wrapgen) serverWrapper() {
 }
 
 // returnsError says whether a method returns an os.Error and where
-func returnsError(m reflect.Method) (hasError bool, pos int) {
-	errorType := reflect.TypeOf((*os.Error)(nil)).Elem()
-	nout := m.Type.NumOut()
+func returnsError(m methodSpec) (hasError bool, pos int) {
+	nout := m.NumOut()
 	for i := 0; i < nout; i++ {
-		if m.Type.Out(i) == errorType {
+		if m.OutIsError(i) {
 			return true, i
 		}
 	}
@@ -971,11 +1032,11 @@ func returnsError(m reflect.Method) (hasError bool, pos int) {
 // inouts returns an array with the positions (starting at o) of input 
 // parameters that are pointers. 
 // Those pointers should be treated as input/output parameters
-func inouts(m reflect.Method) []int {
-	nin := m.Type.NumIn()
+func inouts(m methodSpec) []int {
+	nin := m.NumIn()
 	ptrs := make([]int, 0)
 	for i := 0; i < nin; i++ {
-		if m.Type.In(i).Kind() == reflect.Ptr {
+		if m.InIsPtr(i) {
 			ptrs = append(ptrs, i)
 		}
 	}

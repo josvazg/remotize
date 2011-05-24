@@ -360,11 +360,17 @@ func main() {
 }
 `
 
+// remotize item info
+type itemInfo struct {
+	*token.Position
+	spec *ast.TypeSpec
+}
+
 // remotize spec
 type remotizeSpec struct {
 	currpack      string
 	importAliases map[string]string
-	items         map[string]*token.Position
+	items         map[string]*itemInfo
 	fset          *token.FileSet
 	Imports       *bytes.Buffer
 	RemotizeList  *bytes.Buffer
@@ -445,7 +451,7 @@ func parseRemotizeCalls(r *remotizeSpec, decl ast.Decl) {
 		return
 	}
 	pos := r.fset.Position(id.Pos())
-	r.items[fixPack(r, id.Name)] = &pos
+	r.items[fixPack(r, id.Name)] = &itemInfo{&pos, nil}
 }
 
 func parseComment(r *remotizeSpec, idecl ast.Decl) {
@@ -479,7 +485,7 @@ func parseComment(r *remotizeSpec, idecl ast.Decl) {
 				return
 			}
 			pos := r.fset.Position(cmt.Pos())
-			r.items[name] = &pos
+			r.items[name] = &itemInfo{&pos, tspec}
 		}
 	}
 }
@@ -529,8 +535,20 @@ func build(r *remotizeSpec) os.Error {
 		return e
 	}
 	for name, pos := range r.items {
+		var s string
+		if pos.spec == nil {
+			s = name
+		} else {
+			w := bytes.NewBuffer(make([]byte, 0))
+			e = printer.Fprint(w, r.fset, pos.spec)
+			if e != nil {
+				return e
+			}
+			s = "\x60package " + r.currpack + "\n\n"
+			s = s + "type " + w.String() + "\x60"
+		}
 		fmt.Fprintf(r.RemotizeList, "{%v, &Position{\"%v\",%v,%v,%v}},",
-			name, pos.Filename, pos.Offset, pos.Line, pos.Column)
+			s, pos.Filename, pos.Offset, pos.Line, pos.Column)
 	}
 	t.Execute(src, r)
 	fset := token.NewFileSet()
@@ -556,7 +574,7 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 	done := 0
 	rs := &remotizeSpec{}
 	rs.fset = token.NewFileSet()
-	rs.items = make(map[string]*token.Position)
+	rs.items = make(map[string]*itemInfo)
 	for _, f := range files {
 		filename := path + "/" + f
 		file, e := parser.ParseFile(rs.fset, filename, nil, parser.ParseComments)

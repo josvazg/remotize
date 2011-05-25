@@ -84,6 +84,20 @@ func runCmd(cmd string, argv ...string) {
 	c.Close()
 }
 
+var dict map[string]string;
+
+func goexec(tool string)string {
+	if dict==nil {
+		dict=make(map[string]string)
+		dict["386"]="8"
+		dict["amd64"]="6"
+		dict["arm"]="5"
+		dict["compiler"]="g"
+		dict["linked"]="l"
+	}
+	return dict[os.Getenv("GOARCH")]+dict[tool]
+}
+
 func TestAutoremotize(t *test.T) {
 	fmt.Println("Autoremotize...")
 	n, e := Autoremotize(".", []string{"remotize_test.go"})
@@ -99,13 +113,14 @@ func TestAutoremotize(t *test.T) {
 		return
 	}
 	gopath := os.Getenv("GOBIN") + filepath.SeparatorString
-	runCmd(gopath+"6g", "-I", "_test", filename+".go")
+	
+	runCmd(gopath+goexec("compiler"), "-I", "_test", filename+".go")
 	_, e = os.Stat("./" + filename + ".6")
 	if e != nil {
 		fmt.Println(e)
 		return
 	}
-	runCmd(gopath+"6l", "-L", "_test", filename+".6")
+	runCmd(gopath+gopath+goexec("linker"), "-L", "_test", filename+".6")
 }
 
 func TestRemotized(t *test.T) {

@@ -349,11 +349,10 @@ ${RemotizeList}
 
 func main() {
 	for _,r := range toremotize {
-		remotize.Remotize(r.iface)
-		e:=recover()
+		e:=remotize.Remotize(r)
 		if(e!=nil) {
 			msg:=fmt.Sprintf("Error remotizing %v: '%v' at %v",
-				reflect.Typeof(r.iface),e,r.position)
+				reflect.TypeOf(r.iface),e,r.position)
 			panic(msg)
 		}
 	}
@@ -363,7 +362,7 @@ func main() {
 // remotize item info
 type itemInfo struct {
 	*token.Position
-	spec *ast.TypeSpec
+	src bool
 }
 
 // remotize spec
@@ -451,7 +450,7 @@ func parseRemotizeCalls(r *remotizeSpec, decl ast.Decl) {
 		return
 	}
 	pos := r.fset.Position(id.Pos())
-	r.items[fixPack(r, id.Name)] = &itemInfo{&pos, nil}
+	r.items[fixPack(r, id.Name)] = &itemInfo{&pos, false}
 }
 
 func parseComment(r *remotizeSpec, idecl ast.Decl) {
@@ -484,8 +483,8 @@ func parseComment(r *remotizeSpec, idecl ast.Decl) {
 			if _, ok := r.items[name]; ok {
 				return
 			}
-			pos := r.fset.Position(cmt.Pos())
-			r.items[name] = &itemInfo{&pos, tspec}
+			pos := r.fset.Position(tspec.Pos())
+			r.items[name] = &itemInfo{&pos, true}
 		}
 	}
 }
@@ -520,7 +519,7 @@ func parseFile(r *remotizeSpec, file *ast.File) {
 }
 
 func build(r *remotizeSpec) os.Error {
-	imports := []string{"go/token", "reflect", "remotize"}
+	imports := []string{"fmt", "go/token", "reflect", "remotize"}
 	sort.SortStrings(imports)
 	r.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range imports {
@@ -536,18 +535,12 @@ func build(r *remotizeSpec) os.Error {
 	}
 	for name, pos := range r.items {
 		var s string
-		if pos.spec == nil {
-			s = name
+		if pos.src {
+			s = "\"" + name + "\""
 		} else {
-			w := bytes.NewBuffer(make([]byte, 0))
-			e = printer.Fprint(w, r.fset, pos.spec)
-			if e != nil {
-				return e
-			}
-			s = "\x60package " + r.currpack + "\n\n"
-			s = s + "type " + w.String() + "\x60"
+			s = name
 		}
-		fmt.Fprintf(r.RemotizeList, "{%v, &Position{\"%v\",%v,%v,%v}},",
+		fmt.Fprintf(r.RemotizeList, "{%v, &token.Position{\"%v\",%v,%v,%v}},",
 			s, pos.Filename, pos.Offset, pos.Line, pos.Column)
 	}
 	t.Execute(src, r)
@@ -610,6 +603,24 @@ func Remotize(iface interface{}) os.Error {
 			return remotize(srcIfaceSpec{src.Name.Name, it}, "")
 		}
 	}
+	pos, ok := (iface).(*token.Position)
+	if ok {
+		fset := token.NewFileSet()
+		file, e := parser.ParseFile(fset, pos.Filename, nil, parser.ParseComments)
+		if e != nil {
+			return e
+		}
+		var tspec *ast.TypeSpec
+		ast.Inspect(file, func(n ast.Node) bool {
+			if fset.Position(n.Pos()).Offset == pos.Offset {
+				tspec = n.(*ast.TypeSpec)
+				return false
+			}
+			return true
+		})
+		ast.Print(fset, tspec)
+		fmt.Println("Do'h")
+	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
 		return remotize(rtIfaceSpec{it}, "")
 	}
@@ -619,7 +630,7 @@ func Remotize(iface interface{}) os.Error {
 			return remotize(rtIfaceSpec{it}, "")
 		}
 	}
-	msg := fmt.Sprintln("Can't remotize %v of non interface type %v", iface, t)
+	msg := fmt.Sprintln("Can't remotize %v of type %v", iface, t)
 	return os.NewError(msg)
 }
 

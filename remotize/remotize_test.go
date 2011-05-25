@@ -1,12 +1,14 @@
 package remotize
 
 import (
+	"exec"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"rpc"
 	"strconv"
+	"strings"
 	test "testing"
 )
 
@@ -63,6 +65,31 @@ func (sc *simplecalc) RandomizeSeed(seed float64) {
 }
 
 func TestRemotize(t *test.T) {
+	e := Remotize(new(Calc))
+	if e != nil {
+		fmt.Println(e)
+		return
+	}
+}
+
+func runCmd(cmd string) {
+	fmt.Println("cmd", cmd)
+	parts := strings.Split(cmd, " ", -1)
+	fmt.Println("parts", parts)
+	prog := parts[0]
+	fmt.Println("prog", prog)
+	argv := parts[1:]
+	fmt.Println("argv", argv)
+	c, e := exec.Run(prog, argv, os.Environ(), "",
+		exec.PassThrough, exec.PassThrough, exec.PassThrough)
+	if e != nil {
+		panic(e)
+	}
+	c.Wait(0)
+	c.Close()
+}
+
+func TestAutoremotize(t *test.T) {
 	fmt.Println("Autoremotize...")
 	n, e := Autoremotize(".", []string{"remotize_test.go"})
 	if e != nil {
@@ -70,11 +97,14 @@ func TestRemotize(t *test.T) {
 		return
 	}
 	fmt.Println(n, "remotized")
-	e = Remotize(new(Calc))
+	filename := "autoremotized"
+	_, e = os.Stat("./_" + filename + ".go")
 	if e != nil {
 		fmt.Println(e)
 		return
 	}
+	runCmd("6g -I _test _" + filename + ".go")
+	runCmd("6l -L _test _" + filename + ".6")
 }
 
 func TestRemotized(t *test.T) {

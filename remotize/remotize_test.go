@@ -1,11 +1,12 @@
 package remotize
 
 import (
-	"exec"
+	//"exec"
 	"fmt"
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"rpc"
 	"strconv"
 	"strings"
@@ -73,20 +74,16 @@ func TestRemotize(t *test.T) {
 }
 
 func runCmd(cmd string) {
-	fmt.Println("cmd", cmd)
+	fmt.Println(cmd)
 	parts := strings.Split(cmd, " ", -1)
-	fmt.Println("parts", parts)
 	prog := parts[0]
-	fmt.Println("prog", prog)
 	argv := parts[1:]
-	fmt.Println("argv", argv)
-	c, e := exec.Run(prog, argv, os.Environ(), "",
-		exec.PassThrough, exec.PassThrough, exec.PassThrough)
+	p, e := os.StartProcess(prog, argv, &os.ProcAttr{"", nil, nil})
 	if e != nil {
 		panic(e)
 	}
-	c.Wait(0)
-	c.Close()
+	p.Wait(0)
+	p.Release()
 }
 
 func TestAutoremotize(t *test.T) {
@@ -97,14 +94,15 @@ func TestAutoremotize(t *test.T) {
 		return
 	}
 	fmt.Println(n, "remotized")
-	filename := "autoremotized"
-	_, e = os.Stat("./_" + filename + ".go")
+	filename := "_autoremotized"
+	_, e = os.Stat("./" + filename + ".go")
 	if e != nil {
 		fmt.Println(e)
 		return
 	}
-	runCmd("6g -I _test _" + filename + ".go")
-	runCmd("6l -L _test _" + filename + ".6")
+	gopath := os.Getenv("GOBIN") + filepath.SeparatorString
+	runCmd(gopath + "6g -I _test " + filename + ".go")
+	runCmd(gopath + "6l -L _test " + filename + ".6")
 }
 
 func TestRemotized(t *test.T) {

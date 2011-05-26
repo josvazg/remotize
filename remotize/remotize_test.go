@@ -84,18 +84,18 @@ func runCmd(cmdargs ...string) {
 	c.Close()
 }
 
-var dict map[string]string;
+var dict map[string]string
 
-func goexec(tool string)string {
-	if dict==nil {
-		dict=make(map[string]string)
-		dict["386"]="8"
-		dict["amd64"]="6"
-		dict["arm"]="5"
-		dict["compiler"]="g"
-		dict["linker"]="l"
+func goexec(tool string) string {
+	if dict == nil {
+		dict = make(map[string]string)
+		dict["386"] = "8"
+		dict["amd64"] = "6"
+		dict["arm"] = "5"
+		dict["compiler"] = "g"
+		dict["linker"] = "l"
 	}
-	return dict[os.Getenv("GOARCH")]+dict[tool]
+	return dict[os.Getenv("GOARCH")] + dict[tool]
 }
 
 func gobin() string {
@@ -103,11 +103,11 @@ func gobin() string {
 }
 
 func gocompile() string {
-	return gobin()+goexec("compiler")
+	return gobin() + goexec("compiler")
 }
 
 func golink() string {
-	return gobin()+goexec("linker")
+	return gobin() + goexec("linker")
 }
 
 func goext() string {
@@ -129,7 +129,8 @@ func TestAutoremotize(t *test.T) {
 		return
 	}
 	runCmd(gocompile(), "-I", "_test", filename+".go")
-	runCmd(golink(), "-L", "_test", filename+"."+goext())
+	runCmd(golink(), "-L", "_test", "-o", filename, filename+"."+goext())
+	runCmd("./" + filename)
 }
 
 func TestRemotized(t *test.T) {

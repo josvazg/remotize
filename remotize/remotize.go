@@ -340,20 +340,14 @@ import (
 ${Imports}
 )
 
-var toremotize = []struct {
-	iface		interface{}
-	position	*token.Position	
-}{
+var toremotize = []remotize.RemotizeSpec{
 ${RemotizeList}
 }
 
 func main() {
 	for _,r := range toremotize {
-		e:=remotize.Remotize(r)
-		if(e!=nil) {
-			msg:=fmt.Sprintf("Error remotizing %v: '%v' at %v",
-				reflect.TypeOf(r.iface),e,r.position)
-			panic(msg)
+		if e:=remotize.Remotize(r); e!=nil {
+			panic(e)
 		}
 	}
 }
@@ -366,13 +360,19 @@ type itemInfo struct {
 }
 
 // remotize spec
-type remotizeSpec struct {
+type rinfo struct {
 	currpack      string
 	importAliases map[string]string
 	items         map[string]*itemInfo
 	fset          *token.FileSet
 	Imports       *bytes.Buffer
 	RemotizeList  *bytes.Buffer
+}
+
+// remotize info
+type RemotizeSpec struct {
+	Iface interface{}
+	Pos   *token.Position
 }
 
 // supress will remove the ocurrences of sups strings from s 
@@ -389,7 +389,7 @@ func empty(s string) bool {
 	return len(s) == 0 || s == "//" || s == "*/"
 }
 
-func fixPack(r *remotizeSpec, name string) string {
+func fixPack(r *rinfo, name string) string {
 	if !strings.Contains(name, ".") {
 		return r.currpack + "." + name
 	}
@@ -401,7 +401,7 @@ func fixPack(r *remotizeSpec, name string) string {
 	return alias + "." + parts[1]
 }
 
-func parseRemotizeCalls(r *remotizeSpec, decl ast.Decl) {
+func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
 	call, ok := (interface{})(decl).(*ast.CallExpr)
 	if !ok {
 		return
@@ -453,7 +453,7 @@ func parseRemotizeCalls(r *remotizeSpec, decl ast.Decl) {
 	r.items[fixPack(r, id.Name)] = &itemInfo{&pos, false}
 }
 
-func parseComment(r *remotizeSpec, idecl ast.Decl) {
+func parseComment(r *rinfo, idecl ast.Decl) {
 	decl, ok := (interface{})(idecl).(*ast.GenDecl)
 	if !ok {
 		return
@@ -489,14 +489,14 @@ func parseComment(r *remotizeSpec, idecl ast.Decl) {
 	}
 }
 
-func parseRemotizeDemands(r *remotizeSpec, file *ast.File) {
+func parseRemotizeDemands(r *rinfo, file *ast.File) {
 	for _, decl := range file.Decls {
 		parseComment(r, decl)
 		parseRemotizeCalls(r, decl)
 	}
 }
 
-func parseImports(r *remotizeSpec, file *ast.File) {
+func parseImports(r *rinfo, file *ast.File) {
 	r.importAliases = make(map[string]string)
 	for _, decl := range file.Decls {
 		imp, ok := (interface{})(decl).(*ast.ImportSpec)
@@ -512,14 +512,14 @@ func parseImports(r *remotizeSpec, file *ast.File) {
 	}
 }
 
-func parseFile(r *remotizeSpec, file *ast.File) {
+func parseFile(r *rinfo, file *ast.File) {
 	r.currpack = file.Name.Name
 	parseImports(r, file)
 	parseRemotizeDemands(r, file)
 }
 
-func build(r *remotizeSpec) os.Error {
-	imports := []string{"fmt", "go/token", "reflect", "remotize"}
+func build(r *rinfo) os.Error {
+	imports := []string{"go/token", "remotize"}
 	sort.SortStrings(imports)
 	r.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range imports {
@@ -565,7 +565,7 @@ func build(r *remotizeSpec) os.Error {
 // the given list of "files" in their common "path"
 func Autoremotize(path string, files []string) (int, os.Error) {
 	done := 0
-	rs := &remotizeSpec{}
+	rs := &rinfo{}
 	rs.fset = token.NewFileSet()
 	rs.items = make(map[string]*itemInfo)
 	for _, f := range files {
@@ -596,41 +596,38 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 // Remotize will create the rpc client/server file needed to use some given 
 // interface remotely
 func Remotize(iface interface{}) os.Error {
-	src, ok := (iface).(*ast.TypeSpec)
+	ri, ok := (iface).(RemotizeSpec)
 	if ok {
-		it, ok := (src.Type).(*ast.InterfaceType)
-		if ok {
-			return remotize(srcIfaceSpec{src.Name.Name, it}, "")
+		if _, ok := ri.Iface.(string); !ok {
+			return Remotize(ri.Iface)
 		}
-	}
-	pos, ok := (iface).(*token.Position)
-	if ok {
 		fset := token.NewFileSet()
-		file, e := parser.ParseFile(fset, pos.Filename, nil, parser.ParseComments)
+		file, e := parser.ParseFile(fset, ri.Pos.Filename, nil, parser.ParseComments)
 		if e != nil {
 			return e
 		}
 		var tspec *ast.TypeSpec
 		ast.Inspect(file, func(n ast.Node) bool {
-			if fset.Position(n.Pos()).Offset == pos.Offset {
+			if n != nil && fset.Position(n.Pos()).Offset == ri.Pos.Offset {
 				tspec = n.(*ast.TypeSpec)
 				return false
 			}
 			return true
 		})
-		ast.Print(fset, tspec)
-		fmt.Println("Do'h")
+		if it, ok := (tspec.Type).(*ast.InterfaceType); ok {
+			return remotize(&srcIfaceSpec{tspec.Name.Name, file.Name.Name, it})
+		}
 	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
-		return remotize(rtIfaceSpec{it}, "")
+		return remotize(&rtIfaceSpec{it})
 	}
 	t := reflect.TypeOf(iface)
 	if pt := t; pt.Kind() == reflect.Ptr {
 		if it := pt.Elem(); it.Kind() == reflect.Interface {
-			return remotize(rtIfaceSpec{it}, "")
+			return remotize(&rtIfaceSpec{it})
 		}
 	}
-	msg := fmt.Sprintln("Can't remotize %v of type %v", iface, t)
+	msg := fmt.Sprintf("Can't remotize %v of type %v", iface, t)
 	return os.NewError(msg)
 }
 
@@ -647,31 +644,34 @@ type rtIfaceSpec struct {
 	reflect.Type
 }
 
-func (is rtIfaceSpec) MethodSpec(i int) methodSpec {
-	return rtMethodSpec{is.Method(i), nil}
+func (is *rtIfaceSpec) MethodSpec(i int) methodSpec {
+	return &rtMethodSpec{is.Method(i), nil}
 }
 
 // source interface specification
 type srcIfaceSpec struct {
 	name string
+	pack string
 	*ast.InterfaceType
 }
 
-func (is srcIfaceSpec) Name() string {
+func (is *srcIfaceSpec) Name() string {
+	fmt.Println("Name=", is.name)
 	return is.name
 }
 
-func (is srcIfaceSpec) PkgPath() string {
-	return ""
+func (is *srcIfaceSpec) PkgPath() string {
+	fmt.Println("Pack=", is.pack)
+	return is.pack
 }
 
-func (is srcIfaceSpec) NumMethod() int {
+func (is *srcIfaceSpec) NumMethod() int {
 	return len(is.Methods.List)
 }
 
-func (is srcIfaceSpec) MethodSpec(i int) methodSpec {
+func (is *srcIfaceSpec) MethodSpec(i int) methodSpec {
 	m := is.Methods.List[i]
-	return srcMethodSpec{m.Names[0].Name, (m.Type).(*ast.FuncType)}
+	return &srcMethodSpec{m.Names[0].Name, (m.Type).(*ast.FuncType)}
 }
 
 // method specification
@@ -694,49 +694,48 @@ type rtMethodSpec struct {
 	errorType reflect.Type
 }
 
-func (m rtMethodSpec) MethodName() string {
+func (m *rtMethodSpec) MethodName() string {
 	return m.Name
 }
 
-func (m rtMethodSpec) NumIn() int {
+func (m *rtMethodSpec) NumIn() int {
 	return m.Type.NumIn()
 }
 
-func (m rtMethodSpec) InName(i int) string {
+func (m *rtMethodSpec) InName(i int) string {
 	return m.Type.In(i).String()
 }
 
-func (m rtMethodSpec) InElem(i int) string {
+func (m *rtMethodSpec) InElem(i int) string {
 	return m.Type.In(i).Elem().String()
 }
 
-func (m rtMethodSpec) InPkg(i int) string {
+func (m *rtMethodSpec) InPkg(i int) string {
 	return m.Type.In(i).PkgPath()
 }
 
-func (m rtMethodSpec) InIsPtr(i int) bool {
+func (m *rtMethodSpec) InIsPtr(i int) bool {
 	return m.Type.In(i).Kind() == reflect.Ptr
 }
 
-func (m rtMethodSpec) NumOut() int {
+func (m *rtMethodSpec) NumOut() int {
 	return m.Type.NumOut()
 }
 
-func (m rtMethodSpec) OutName(i int) string {
+func (m *rtMethodSpec) OutName(i int) string {
 	return m.Type.Out(i).String()
 }
 
-func (m rtMethodSpec) OutPkg(i int) string {
+func (m *rtMethodSpec) OutPkg(i int) string {
 	return m.Type.Out(i).PkgPath()
 }
 
-func (m rtMethodSpec) OutIsError(i int) bool {
+func (m *rtMethodSpec) OutIsError(i int) bool {
 	if m.errorType == nil {
 		m.errorType = reflect.TypeOf((*os.Error)(nil)).Elem()
 	}
 	return m.Type.Out(i) == m.errorType
 }
-
 
 // source method specification
 type srcMethodSpec struct {
@@ -744,11 +743,11 @@ type srcMethodSpec struct {
 	*ast.FuncType
 }
 
-func (m srcMethodSpec) MethodName() string {
+func (m *srcMethodSpec) MethodName() string {
 	return m.name
 }
 
-func (m srcMethodSpec) NumIn() int {
+func (m *srcMethodSpec) NumIn() int {
 	return len(m.Params.List)
 }
 
@@ -765,11 +764,11 @@ func solveName(e interface{}) string {
 	return ""
 }
 
-func (m srcMethodSpec) InName(i int) string {
+func (m *srcMethodSpec) InName(i int) string {
 	return solveName(m.Params.List[i])
 }
 
-func (m srcMethodSpec) InElem(i int) string {
+func (m *srcMethodSpec) InElem(i int) string {
 	s := m.InName(i)
 	if strings.Index(s, "*") == 0 {
 		return s[1:]
@@ -777,7 +776,7 @@ func (m srcMethodSpec) InElem(i int) string {
 	return s
 }
 
-func (m srcMethodSpec) InPkg(i int) string {
+func (m *srcMethodSpec) InPkg(i int) string {
 	s := m.InName(i)
 	if i := strings.Index(s, "."); i > 0 {
 		return s[0:i]
@@ -785,20 +784,23 @@ func (m srcMethodSpec) InPkg(i int) string {
 	return ""
 }
 
-func (m srcMethodSpec) InIsPtr(i int) bool {
+func (m *srcMethodSpec) InIsPtr(i int) bool {
 	s := m.InName(i)
 	return strings.Index(s, "*") == 0
 }
 
-func (m srcMethodSpec) NumOut() int {
+func (m *srcMethodSpec) NumOut() int {
+	if m.Results == nil {
+		return 0
+	}
 	return len(m.Results.List)
 }
 
-func (m srcMethodSpec) OutName(i int) string {
+func (m *srcMethodSpec) OutName(i int) string {
 	return solveName(m.Results.List[i])
 }
 
-func (m srcMethodSpec) OutPkg(i int) string {
+func (m *srcMethodSpec) OutPkg(i int) string {
 	s := m.OutName(i)
 	if i := strings.Index(s, "."); i > 0 {
 		return s[0:i]
@@ -806,18 +808,15 @@ func (m srcMethodSpec) OutPkg(i int) string {
 	return ""
 }
 
-func (m srcMethodSpec) OutIsError(i int) bool {
+func (m *srcMethodSpec) OutIsError(i int) bool {
 	return m.OutName(i) == "os.Error"
 }
 
 // remotize will remotize the interface by generating 
 // the proper rpc client/server wrapping
-func remotize(is ifaceSpec, pack string) os.Error {
+func remotize(is ifaceSpec) os.Error {
 	fmt.Println("Remotizing interface", is.Name())
-	if pack == "" {
-		pack = is.PkgPath()
-	}
-	w := newWrapgen(is.Name(), pack)
+	w := newWrapgen(is.Name(), is.PkgPath())
 
 	nm := is.NumMethod()
 	fmt.Println("Interface exports", nm, "methods")
@@ -825,6 +824,7 @@ func remotize(is ifaceSpec, pack string) os.Error {
 		m := is.MethodSpec(i)
 		w.addMethod(m)
 	}
+	fmt.Println("Generating wrapper...")
 	return w.genWrapper(is.Name())
 }
 
@@ -886,17 +886,27 @@ func (w *wrapgen) genWrapper(name string) os.Error {
 	t.SetDelims("${", "}")
 	e := t.Parse(wrapsrc)
 	if e != nil {
+		fmt.Println("Error parsing source:\n" + wrapsrc)
 		return e
 	}
 	t.Execute(src, w)
 	fset := token.NewFileSet()
 	filename := strings.ToLower(name) + "Remotized.go"
-	f, e := parser.ParseFile(fset, filename, src, parser.ParseComments)
+	f, e := parser.ParseFile(fset, "", src, parser.ParseComments)
 	if e != nil {
+		fmt.Printf("Error parsing file %v src:\n%v\n", filename)
+		fos, e := os.Create(filename + ".dump")
+		if e != nil {
+			fmt.Println("Error creating file:\n" + filename)
+			return e
+		}
+		fmt.Fprintln(fos, src)
+		fos.Close()
 		return e
 	}
 	fos, e := os.Create(filename)
 	if e != nil {
+		fmt.Println("Error creating file:\n" + filename)
 		return e
 	}
 	pcfg := &printer.Config{printer.TabIndent, 1}

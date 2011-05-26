@@ -73,9 +73,9 @@ func TestRemotize(t *test.T) {
 	}
 }
 
-func runCmd(cmd string, argv ...string) {
-	fmt.Println(cmd, argv)
-	c, e := exec.Run(cmd, argv, os.Environ(), "",
+func runCmd(cmdargs ...string) {
+	fmt.Println(cmdargs)
+	c, e := exec.Run(cmdargs[0], cmdargs, os.Environ(), "",
 		exec.PassThrough, exec.PassThrough, exec.PassThrough)
 	if e != nil {
 		panic(e)
@@ -93,9 +93,25 @@ func goexec(tool string)string {
 		dict["amd64"]="6"
 		dict["arm"]="5"
 		dict["compiler"]="g"
-		dict["linked"]="l"
+		dict["linker"]="l"
 	}
 	return dict[os.Getenv("GOARCH")]+dict[tool]
+}
+
+func gobin() string {
+	return os.Getenv("GOBIN") + filepath.SeparatorString
+}
+
+func gocompile() string {
+	return gobin()+goexec("compiler")
+}
+
+func golink() string {
+	return gobin()+goexec("linker")
+}
+
+func goext() string {
+	return goexec("")
 }
 
 func TestAutoremotize(t *test.T) {
@@ -112,15 +128,8 @@ func TestAutoremotize(t *test.T) {
 		fmt.Println(e)
 		return
 	}
-	gopath := os.Getenv("GOBIN") + filepath.SeparatorString
-	
-	runCmd(gopath+goexec("compiler"), "-I", "_test", filename+".go")
-	_, e = os.Stat("./" + filename + ".6")
-	if e != nil {
-		fmt.Println(e)
-		return
-	}
-	runCmd(gopath+gopath+goexec("linker"), "-L", "_test", filename+".6")
+	runCmd(gocompile(), "-I", "_test", filename+".go")
+	runCmd(golink(), "-L", "_test", filename+"."+goext())
 }
 
 func TestRemotized(t *test.T) {

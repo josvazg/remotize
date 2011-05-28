@@ -648,6 +648,21 @@ func (is *rtIfaceSpec) MethodSpec(i int) methodSpec {
 	return &rtMethodSpec{is.Method(i), nil}
 }
 
+func solveName(e interface{}) string {
+	switch (e).(type) {
+	case *ast.Field:
+		return solveName((interface{})(e).(*ast.Field).Type)
+	case *ast.Ident:
+		return (interface{})(e).(*ast.Ident).Name
+	case *ast.StarExpr:
+		return "*" + solveName((interface{})(e).(*ast.StarExpr).X)
+	case *ast.SelectorExpr:
+		se := (interface{})(e).(*ast.SelectorExpr)
+		return solveName(se.X) + "." + se.Sel.Name
+	}
+	return ""
+}
+
 // source interface specification
 type srcIfaceSpec struct {
 	name string
@@ -656,12 +671,10 @@ type srcIfaceSpec struct {
 }
 
 func (is *srcIfaceSpec) Name() string {
-	fmt.Println("Name=", is.name)
 	return is.name
 }
 
 func (is *srcIfaceSpec) PkgPath() string {
-	fmt.Println("Pack=", is.pack)
 	return is.pack
 }
 
@@ -671,7 +684,7 @@ func (is *srcIfaceSpec) NumMethod() int {
 
 func (is *srcIfaceSpec) MethodSpec(i int) methodSpec {
 	m := is.Methods.List[i]
-	return &srcMethodSpec{m.Names[0].Name, (m.Type).(*ast.FuncType)}
+	return &srcMethodSpec{solveName(m.Names[0]), (m.Type).(*ast.FuncType)}
 }
 
 // method specification
@@ -751,19 +764,6 @@ func (m *srcMethodSpec) NumIn() int {
 	return len(m.Params.List)
 }
 
-func solveName(e interface{}) string {
-	switch (e).(type) {
-	case *ast.Ident:
-		return (interface{})(e).(*ast.Ident).Name
-	case *ast.StarExpr:
-		return "*" + solveName((interface{})(e).(*ast.StarExpr).X)
-	case *ast.SelectorExpr:
-		se := (interface{})(e).(*ast.SelectorExpr)
-		return solveName(se.X) + "." + se.Sel.Name
-	}
-	return ""
-}
-
 func (m *srcMethodSpec) InName(i int) string {
 	return solveName(m.Params.List[i])
 }
@@ -797,13 +797,14 @@ func (m *srcMethodSpec) NumOut() int {
 }
 
 func (m *srcMethodSpec) OutName(i int) string {
+	//ast.Print(token.NewFileSet(),m.Results.List[i])
 	return solveName(m.Results.List[i])
 }
 
 func (m *srcMethodSpec) OutPkg(i int) string {
 	s := m.OutName(i)
-	if i := strings.Index(s, "."); i > 0 {
-		return s[0:i]
+	if j := strings.Index(s, "."); j > 0 {
+		return s[0:j]
 	}
 	return ""
 }
@@ -894,7 +895,7 @@ func (w *wrapgen) genWrapper(name string) os.Error {
 	filename := strings.ToLower(name) + "Remotized.go"
 	f, e := parser.ParseFile(fset, "", src, parser.ParseComments)
 	if e != nil {
-		fmt.Printf("Error parsing file %v src:\n%v\n", filename)
+		fmt.Printf("Error %v parsing file %v src\n", e, filename)
 		fos, e := os.Create(filename + ".dump")
 		if e != nil {
 			fmt.Println("Error creating file:\n" + filename)

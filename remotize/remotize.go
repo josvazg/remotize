@@ -615,7 +615,7 @@ func Remotize(iface interface{}) os.Error {
 			return true
 		})
 		if it, ok := (tspec.Type).(*ast.InterfaceType); ok {
-			return remotize(&srcIfaceSpec{tspec.Name.Name, file.Name.Name, it})
+			return remotize(NewSrcIfaceSpec(tspec.Name.Name, file.Name.Name, it))
 		}
 	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {
@@ -668,6 +668,31 @@ type srcIfaceSpec struct {
 	name string
 	pack string
 	*ast.InterfaceType
+}
+
+type SortableFields struct {
+	f []*ast.Field
+}
+
+func (sf *SortableFields) Len() int {
+	return len(sf.f)
+}
+
+func (sf *SortableFields) Less(i, j int) bool {
+	return solveName(sf.f[i].Names[0]) < solveName(sf.f[j].Names[0])
+}
+
+func (sf *SortableFields) Swap(i, j int) {
+	f := sf.f[i]
+	sf.f[i] = sf.f[j]
+	sf.f[j] = f
+}
+
+func NewSrcIfaceSpec(name, pack string, it *ast.InterfaceType) *srcIfaceSpec {
+	sis := &srcIfaceSpec{name, pack, it}
+	sf := &SortableFields{it.Methods.List}
+	sort.Sort(sf)
+	return sis
 }
 
 func (is *srcIfaceSpec) Name() string {

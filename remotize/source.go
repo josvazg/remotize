@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -227,5 +228,119 @@ func solveName(e interface{}) string {
 		return solveName(se.X) + "." + se.Sel.Name
 	}
 	return ""
+}
+
+// source interface specification
+type srcIfaceSpec struct {
+	name string
+	pack string
+	*ast.InterfaceType
+}
+
+// sortable fields implement sort.Interface
+type SortableFields struct {
+	f []*ast.Field
+}
+
+func (sf *SortableFields) Len() int {
+	return len(sf.f)
+}
+
+func (sf *SortableFields) Less(i, j int) bool {
+	return solveName(sf.f[i].Names[0]) < solveName(sf.f[j].Names[0])
+}
+
+func (sf *SortableFields) Swap(i, j int) {
+	f := sf.f[i]
+	sf.f[i] = sf.f[j]
+	sf.f[j] = f
+}
+
+// NewSrcIfaceSpec generates a source interface specification from source code
+func NewSrcIfaceSpec(name, pack string, it *ast.InterfaceType) *srcIfaceSpec {
+	sis := &srcIfaceSpec{name, pack, it}
+	sf := &SortableFields{it.Methods.List}
+	sort.Sort(sf)
+	return sis
+}
+
+func (is *srcIfaceSpec) Name() string {
+	return is.name
+}
+
+func (is *srcIfaceSpec) PkgPath() string {
+	return is.pack
+}
+
+func (is *srcIfaceSpec) NumMethod() int {
+	return len(is.Methods.List)
+}
+
+func (is *srcIfaceSpec) MethodSpec(i int) methodSpec {
+	m := is.Methods.List[i]
+	return &srcMethodSpec{solveName(m.Names[0]), (m.Type).(*ast.FuncType)}
+}
+
+// source method specification
+type srcMethodSpec struct {
+	name string
+	*ast.FuncType
+}
+
+func (m *srcMethodSpec) MethodName() string {
+	return m.name
+}
+
+func (m *srcMethodSpec) NumIn() int {
+	return len(m.Params.List)
+}
+
+func (m *srcMethodSpec) InName(i int) string {
+	return solveName(m.Params.List[i])
+}
+
+func (m *srcMethodSpec) InElem(i int) string {
+	s := m.InName(i)
+	if strings.Index(s, "*") == 0 {
+		return s[1:]
+	}
+	return s
+}
+
+func (m *srcMethodSpec) InPkg(i int) string {
+	s := m.InName(i)
+	if i := strings.Index(s, "."); i > 0 {
+		return s[0:i]
+	}
+	return ""
+}
+
+func (m *srcMethodSpec) InIsPtr(i int) bool {
+	s := m.InName(i)
+	return strings.Index(s, "*") == 0
+}
+
+func (m *srcMethodSpec) NumOut() int {
+	if m.Results == nil {
+		return 0
+	}
+	return len(m.Results.List)
+}
+
+func (m *srcMethodSpec) OutName(i int) string {
+	//ast.Print(token.NewFileSet(),m.Results.List[i])
+	return solveName(m.Results.List[i])
+}
+
+func (m *srcMethodSpec) OutPkg(i int) string {
+	s := m.OutName(i)
+	if j := strings.Index(s, "."); j > 0 {
+		return s[0:j]
+	}
+	return ""
+}
+
+func (m *srcMethodSpec) OutIsError(i int) bool {
+	return m.OutName(i) == "os.Error"
 }
 

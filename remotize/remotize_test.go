@@ -1,15 +1,12 @@
 package remotize
 
 import (
-	"exec"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"path/filepath"
 	"rpc"
 	"strconv"
-	//"strings"
 	test "testing"
 )
 
@@ -103,47 +100,6 @@ func TestRemotize(t *test.T) {
 	runRemotizedCalc(t)
 }
 
-func runCmd(cmdargs ...string) {
-	fmt.Println(cmdargs)
-	c, e := exec.Run(cmdargs[0], cmdargs, os.Environ(), "",
-		exec.PassThrough, exec.PassThrough, exec.PassThrough)
-	if e != nil {
-		panic(e)
-	}
-	c.Wait(0)
-	c.Close()
-}
-
-var dict map[string]string
-
-func goexec(tool string) string {
-	if dict == nil {
-		dict = make(map[string]string)
-		dict["386"] = "8"
-		dict["amd64"] = "6"
-		dict["arm"] = "5"
-		dict["compiler"] = "g"
-		dict["linker"] = "l"
-	}
-	return dict[os.Getenv("GOARCH")] + dict[tool]
-}
-
-func gobin() string {
-	return os.Getenv("GOBIN") + filepath.SeparatorString
-}
-
-func gocompile() string {
-	return gobin() + goexec("compiler")
-}
-
-func golink() string {
-	return gobin() + goexec("linker")
-}
-
-func goext() string {
-	return goexec("")
-}
-
 func autoremotize(t *test.T) {
 	n, e := Autoremotize(".", []string{"remotize_test.go"})
 	if e != nil {
@@ -151,15 +107,7 @@ func autoremotize(t *test.T) {
 		return
 	}
 	fmt.Println(n, "remotized")
-	filename := "_autoremotized"
-	_, e = os.Stat("./" + filename + ".go")
-	if e != nil {
-		fmt.Println(e)
-		return
-	}
-	runCmd(gocompile(), "-I", "_test", filename+".go")
-	runCmd(golink(), "-L", "_test", "-o", filename, filename+"."+goext())
-	runCmd("./" + filename)
+
 }
 
 func runRemotizedCalc(t *test.T) {

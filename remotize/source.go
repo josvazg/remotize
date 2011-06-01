@@ -181,9 +181,11 @@ func parseFile(r *rinfo, file *ast.File) {
 	parseRemotizeDemands(r, file)
 }
 
-// Autoremotize will remotize all interfaces that either:
-// -Are defined with a comment including '(remotize)' at the end
-// -Are used within remotize.NewClient(), NewServer() or PleaseRemotize() Calls
+/*
+	Autoremotize will remotize all interfaces that either:
+		- Are defined with a comment including '(remotize)' at the end
+		- Are used within remotize.NewClient(), NewServer() or PleaseRemotize() Calls 
+*/
 func Autoremotize(path string, files []string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
@@ -256,8 +258,8 @@ func (sf *SortableFields) Swap(i, j int) {
 	sf.f[j] = f
 }
 
-// NewSrcIfaceSpec generates a source interface specification from source code
-func NewSrcIfaceSpec(name, pack string, it *ast.InterfaceType) *srcIfaceSpec {
+// newSrcIfaceSpec generates a source interface specification from source code
+func newSrcIfaceSpec(name, pack string, it *ast.InterfaceType) *srcIfaceSpec {
 	sis := &srcIfaceSpec{name, pack, it}
 	sf := &SortableFields{it.Methods.List}
 	sort.Sort(sf)

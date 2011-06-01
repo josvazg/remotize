@@ -104,7 +104,7 @@ func (s *ServerBase) Base() *ServerBase {
 	return s
 }
 
-// Add a remotized type to the registry. The type is Exported since that moment
+// Add a remotized type to the registry, so the interface is 'exported'.
 func Register(c, s interface{}) {
 	ct := reflect.TypeOf(c)
 	st := reflect.TypeOf(s)
@@ -117,7 +117,7 @@ func Register(c, s interface{}) {
 	lock.Unlock()
 }
 
-// Remove a type from registry. The type is UnExported since that moment
+// Remove a type from registry, so the interface is 'unexported'.
 func Unregister(name string) {
 	lock.Lock()
 	reg[name+"Client"] = nil, false
@@ -220,7 +220,8 @@ reply interface{}, timeout int64) os.Error {
 	return call.Error
 }
 
-// HandleError handles an error
+// HandleError handles a remote error. It will either call the preconfigured 
+// client handler or just panic with the remote error.
 func HandleError(c *ClientBase, funcname string, e os.Error) {
 	if c.Handler != nil {
 		c.Handler(funcname, e)

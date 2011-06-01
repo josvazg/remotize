@@ -112,8 +112,12 @@ type RemotizeSpec struct {
 	Pos   *token.Position
 }
 
-// Remotize will create the rpc client/server file needed to use some given 
-// interface remotely
+/*
+	Remotize will create the rpc client/server file needed to use an interface remotely.
+
+	An example invocation will be:
+		remotize.Remotize(new(sort.Interface))
+*/
 func Remotize(iface interface{}) os.Error {
 	ri, ok := (iface).(RemotizeSpec)
 	if ok {
@@ -134,7 +138,7 @@ func Remotize(iface interface{}) os.Error {
 			return true
 		})
 		if it, ok := (tspec.Type).(*ast.InterfaceType); ok {
-			return remotize(NewSrcIfaceSpec(tspec.Name.Name, file.Name.Name, it))
+			return remotize(newSrcIfaceSpec(tspec.Name.Name, file.Name.Name, it))
 		}
 	}
 	if it := reflect.TypeOf(iface); it.Kind() == reflect.Interface {

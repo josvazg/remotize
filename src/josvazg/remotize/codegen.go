@@ -9,7 +9,6 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -506,14 +505,7 @@ func inouts(m methodSpec) []int {
 // runs a command
 func runCmd(cmdargs ...string) os.Error {
 	fmt.Println(cmdargs)
-	c, e := exec.Run(cmdargs[0], cmdargs, os.Environ(), "",
-		exec.PassThrough, exec.PassThrough, exec.PassThrough)
-	if e != nil {
-		return e
-	}
-	c.Wait(0)
-	c.Close()
-	return nil
+	return exec.Command(cmdargs[0], cmdargs[1:]...).Run()
 }
 
 // dictionary cache
@@ -532,19 +524,14 @@ func goexec(tool string) string {
 	return dict[os.Getenv("GOARCH")] + dict[tool]
 }
 
-// Go binary directory
-func gobin() string {
-	return os.Getenv("GOBIN") + filepath.SeparatorString
-}
-
 // Go compiler
 func gocompile() string {
-	return gobin() + goexec("compiler")
+	return goexec("compiler")
 }
 
 // Go linker
 func golink() string {
-	return gobin() + goexec("linker")
+	return goexec("linker")
 }
 
 // Go architecture extension

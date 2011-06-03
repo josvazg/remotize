@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"remotize"
+	"josvazg/remotize"
 )
 
 func main() {

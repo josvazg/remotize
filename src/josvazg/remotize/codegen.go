@@ -149,6 +149,10 @@ func Remotize(iface interface{}) os.Error {
 			return remotize(&rtIfaceSpec{it})
 		}
 	}
+	fmt.Printf("%v type %v has %v methods\n", iface, t, t.NumMethod())
+	if t.NumMethod() > 0 {
+		return remotize(&rtIfaceSpec{t})
+	}
 	msg := fmt.Sprintf("Can't remotize %v of type %v", iface, t)
 	return os.NewError(msg)
 }

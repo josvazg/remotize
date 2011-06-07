@@ -7,11 +7,32 @@ import (
 
 // runtime interface specification implementing ifaceSpec
 type rtIfaceSpec struct {
-	reflect.Type
+	t reflect.Type
+}
+
+func (is *rtIfaceSpec) Name() string {
+	if is.t.Kind() == reflect.Interface {
+		return is.t.Name()
+	}
+	if is.t.Kind() == reflect.Ptr {
+		return is.t.Elem().Name() + "er"
+	}
+	return is.t.Name() + "er"
+}
+
+func (is *rtIfaceSpec) PkgPath() string {
+	if is.t.Kind() == reflect.Ptr {
+		return is.t.Elem().PkgPath()
+	}
+	return is.t.PkgPath()
+}
+
+func (is *rtIfaceSpec) NumMethod() int {
+	return is.t.NumMethod()
 }
 
 func (is *rtIfaceSpec) MethodSpec(i int) methodSpec {
-	return &rtMethodSpec{is.Method(i), nil}
+	return &rtMethodSpec{is.t.Method(i), nil}
 }
 
 // runtime method specification implemeting methodSpec

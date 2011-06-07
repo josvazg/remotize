@@ -84,8 +84,14 @@ func copy(orig, dest string) os.Error {
 }
 
 func TestRemotize(t *test.T) {
+	fmt.Println("Generating code from NON interface type *simplecalc...")
+	e := Remotize(&simplecalc{})
+	if e != nil {
+		fmt.Println(e)
+		return
+	}
 	fmt.Println("Generating code from type new(Calc)...")
-	e := Remotize(new(Calc))
+	e = Remotize(new(Calc))
 	if e != nil {
 		fmt.Println(e)
 		return

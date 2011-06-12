@@ -7,6 +7,7 @@ package remotize
 
 import (
 	"fmt"
+	"go/ast"
 	"io"
 	"os"
 	"reflect"
@@ -254,5 +255,82 @@ func (p *Pipe) Close() os.Error {
 // This can be passed to NewClient to use RPCs over local pipe streams
 func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 	return &Pipe{in, out}
+}
+
+// Old code
+//------------------------------------------
+// New code
+
+func Remotize0(i interface{}) os.Error {
+	if src,ok:=i.(*ast.Decl);ok {
+		return remotize0(src)
+	}
+	t:=reflect.TypeOf(i)
+	if t.Kind()==reflect.Ptr {
+		return Remotize0(t.Elem())
+	}
+	if t.Kind()==reflect.Interface || t.NumMethod()>0 {
+		if src,ok:=type2source(t);ok {
+			return remotize0(src)
+		}
+	}
+	// TODO error
+	return nil
+}
+
+func type2source(t reflect.Type) (*ast.Decl,bool) {
+	name:=t.Name()
+	if t.Kind()!=reflect.Interface {
+		name=name+"er"
+	}
+	if name=="er" {
+		name="Interfacer"
+	}
+	src:="type "+name+" interface {\n"
+	for i:=0;i<t.NumMethod();i++ {
+		
+	}
+	src+="}"
+	return nil,false
+}
+
+func methodSignature(m *reflect.Method) string {
+	src:=m.Name+"("
+	for i:=0;i<m.Type.NumIn();i++ {
+		arg:=m.Type.In(i)
+		src+=typename(arg)
+		if i!=m.Type.NumIn() {
+			src+=", "
+		}
+	}
+	src+=") "
+	if m.Type.NumOut()>1 {
+		src+="("
+	}
+	for i:=0;i<m.Type.NumOut();i++ {
+		arg:=m.Type.Out(i)
+		src+=typename(arg)
+		if i!=m.Type.NumOut() {
+			src+=", "
+		}
+	}
+	if m.Type.NumOut()>1 {
+		src+=")"
+	}
+	return src
+}
+
+func typename(t reflect.Type) string {
+	if t.Kind()==reflect.Ptr {
+		return "*"+typename(t.Elem())
+	}
+	if t.Kind()==reflect.Array {
+		return "[]"+typename(t.Elem())
+	}
+	return ""
+}
+
+func remotize0(i *ast.Decl) os.Error {
+	return nil
 }
 

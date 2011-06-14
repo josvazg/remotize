@@ -8,6 +8,8 @@ package remotize
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"reflect"
@@ -263,8 +265,7 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 // New code
 
 func Remotize0(i interface{}) os.Error {
-	if src, ok := i.(*ast.Decl); ok {
-		fmt.Println(i, " src...")
+	if src, ok := i.([]ast.Decl); ok {
 		return remotize0(src)
 	}
 	var t reflect.Type
@@ -274,27 +275,23 @@ func Remotize0(i interface{}) os.Error {
 		t = reflect.TypeOf(i)
 	}
 	if t.Kind() == reflect.Interface || t.NumMethod() > 0 {
-		fmt.Println(i, " Non empty interface...")
-		fmt.Println(declare(t))
-		return nil
+		return remotize0(declare(t))
 	}
 	if t.Kind() == reflect.Ptr {
-		fmt.Println(i, " Ptr...")
 		return Remotize0(t.Elem())
 	}
-	fmt.Println("?")
 	// TODO error
 	return nil
 }
 
-func declare(t reflect.Type) string {
+func declare(t reflect.Type) []ast.Decl {
 	switch t.Kind() {
 	case reflect.Interface:
-		return t.Name()+ methods(t)
+		return src2ast("type "+t.Name()+ " interface"+methods(t))
 	}
 	st:=t
 	for ;st.Kind()==reflect.Ptr;st=t.Elem() { }
-	return st.Name()+"er"+methods(t)
+	return src2ast("type "+st.Name()+"er interface"+methods(t))
 }
 
 func source(t reflect.Type) string {
@@ -364,43 +361,18 @@ func funcsource(t reflect.Type, m *reflect.Method) string {
 	return fn
 }
 
-func methodSignature(m *reflect.Method) string {
-	src := m.Name + "("
-	for i := 0; i < m.Type.NumIn(); i++ {
-		arg := m.Type.In(i)
-		src += typename(arg)
-		if i != m.Type.NumIn() {
-			src += ", "
-		}
+func src2ast(src string) []ast.Decl {
+	fmt.Println(src)
+	dcls,e:=parser.ParseDeclList(token.NewFileSet(),"",src)
+	if e!=nil {
+		panic(e)
 	}
-	src += ") "
-	if m.Type.NumOut() > 1 {
-		src += "("
-	}
-	for i := 0; i < m.Type.NumOut(); i++ {
-		arg := m.Type.Out(i)
-		src += typename(arg)
-		if i != m.Type.NumOut() {
-			src += ", "
-		}
-	}
-	if m.Type.NumOut() > 1 {
-		src += ")"
-	}
-	return src
+	return dcls
 }
 
-func typename(t reflect.Type) string {
-	if t.Kind() == reflect.Ptr {
-		return "*" + typename(t.Elem())
-	}
-	if t.Kind() == reflect.Array {
-		return "[]" + typename(t.Elem())
-	}
-	return t.Name()
-}
-
-func remotize0(i *ast.Decl) os.Error {
+func remotize0(decls []ast.Decl) os.Error {
+	fmt.Println(len(decls),"declarations")
+	ast.Print(token.NewFileSet(),decls)
 	return nil
 }
 

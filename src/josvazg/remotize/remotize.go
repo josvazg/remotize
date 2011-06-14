@@ -262,10 +262,7 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 //------------------------------------------
 // New code
 
-var seccount int
-
 func Remotize0(i interface{}) os.Error {
-	seccount = 0
 	if src, ok := i.(*ast.Decl); ok {
 		fmt.Println(i, " src...")
 		return remotize0(src)
@@ -278,7 +275,7 @@ func Remotize0(i interface{}) os.Error {
 	}
 	if t.Kind() == reflect.Interface || t.NumMethod() > 0 {
 		fmt.Println(i, " Non empty interface...")
-		fmt.Println(source(t))
+		fmt.Println(declare(t))
 		return nil
 	}
 	if t.Kind() == reflect.Ptr {
@@ -290,18 +287,24 @@ func Remotize0(i interface{}) os.Error {
 	return nil
 }
 
-func source(t reflect.Type) string {
-	seccount++
-	if seccount > 50 {
-		panic("Too deep!")
+func declare(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.Interface:
+		return t.Name()+ methods(t)
 	}
+	st:=t
+	for ;st.Kind()==reflect.Ptr;st=t.Elem() { }
+	return st.Name()+"er"+methods(t)
+}
+
+func source(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Array:
 		return "[" + strconv.Itoa(t.Len()) + "]" + t.Name() + methods(t)
 	case reflect.Chan:
 		return "chan " + source(t.Elem()) + methods(t)
 	case reflect.Func:
-		return funcsource("", t)
+		return funcsource(t, nil)
 	case reflect.Map:
 		return "map[" + source(t.Key()) + "]" + source(t.Elem()) + methods(t)
 	case reflect.Ptr:
@@ -311,17 +314,15 @@ func source(t reflect.Type) string {
 	case reflect.String:
 		return "string" + methods(t)
 	}
-	if t.PkgPath() != "" {
-		return t.String()
-	}
-	return t.Name() + methods(t)
+	return t.String()
 }
 
 func methods(t reflect.Type) string {
 	if t.NumMethod() > 0 {
 		methods := " {"
 		for i := 0; i < t.NumMethod(); i++ {
-			methods += "\n" + funcsource(t.Method(i).Name, t.Method(i).Type)
+			m:=t.Method(i)
+			methods += "\n" + funcsource(t, &m)
 		}
 		methods += "\n}"
 		return methods
@@ -329,14 +330,17 @@ func methods(t reflect.Type) string {
 	return ""
 }
 
-func funcsource(method string, t reflect.Type) string {
+func funcsource(t reflect.Type, m *reflect.Method) string {
 	fn := "func ("
 	start := 0
-	if method != "" {
+	if t.Kind() == reflect.Interface {
+		fn = m.Name + "("
+	} else if m!=nil && m.Name != "" {
 		start++
-		fn = method + "("
-	} else if t.Name() != "" {
-		fn = t.Name() + "("
+		fn = m.Name + "("
+	}
+	if m!=nil {
+		t=m.Type
 	}
 	for i := start; i < t.NumIn(); i++ {
 		fn += source(t.In(i))

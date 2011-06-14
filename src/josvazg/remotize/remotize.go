@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"rpc"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -261,73 +262,138 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 //------------------------------------------
 // New code
 
+var seccount int
+
 func Remotize0(i interface{}) os.Error {
-	if src,ok:=i.(*ast.Decl);ok {
+	seccount = 0
+	if src, ok := i.(*ast.Decl); ok {
+		fmt.Println(i, " src...")
 		return remotize0(src)
 	}
-	t:=reflect.TypeOf(i)
-	if t.Kind()==reflect.Ptr {
+	var t reflect.Type
+	if _, ok := i.(reflect.Type); ok {
+		t = i.(reflect.Type)
+	} else {
+		t = reflect.TypeOf(i)
+	}
+	if t.Kind() == reflect.Interface || t.NumMethod() > 0 {
+		fmt.Println(i, " Non empty interface...")
+		fmt.Println(source(t))
+		return nil
+	}
+	if t.Kind() == reflect.Ptr {
+		fmt.Println(i, " Ptr...")
 		return Remotize0(t.Elem())
 	}
-	if t.Kind()==reflect.Interface || t.NumMethod()>0 {
-		if src,ok:=type2source(t);ok {
-			return remotize0(src)
-		}
-	}
+	fmt.Println("?")
 	// TODO error
 	return nil
 }
 
-func type2source(t reflect.Type) (*ast.Decl,bool) {
-	name:=t.Name()
-	if t.Kind()!=reflect.Interface {
-		name=name+"er"
+func source(t reflect.Type) string {
+	seccount++
+	if seccount > 50 {
+		panic("Too deep!")
 	}
-	if name=="er" {
-		name="Interfacer"
+	switch t.Kind() {
+	case reflect.Array:
+		return "[" + strconv.Itoa(t.Len()) + "]" + t.Name() + methods(t)
+	case reflect.Chan:
+		return "chan " + source(t.Elem()) + methods(t)
+	case reflect.Func:
+		return funcsource("", t)
+	case reflect.Map:
+		return "map[" + source(t.Key()) + "]" + source(t.Elem()) + methods(t)
+	case reflect.Ptr:
+		return "*" + source(t.Elem()) + methods(t)
+	case reflect.Slice:
+		return "[]" + source(t.Elem()) + methods(t)
+	case reflect.String:
+		return "string" + methods(t)
 	}
-	src:="type "+name+" interface {\n"
-	for i:=0;i<t.NumMethod();i++ {
-		
+	if t.PkgPath() != "" {
+		return t.String()
 	}
-	src+="}"
-	return nil,false
+	return t.Name() + methods(t)
+}
+
+func methods(t reflect.Type) string {
+	if t.NumMethod() > 0 {
+		methods := " {"
+		for i := 0; i < t.NumMethod(); i++ {
+			methods += "\n" + funcsource(t.Method(i).Name, t.Method(i).Type)
+		}
+		methods += "\n}"
+		return methods
+	}
+	return ""
+}
+
+func funcsource(method string, t reflect.Type) string {
+	fn := "func ("
+	start := 0
+	if method != "" {
+		start++
+		fn = method + "("
+	} else if t.Name() != "" {
+		fn = t.Name() + "("
+	}
+	for i := start; i < t.NumIn(); i++ {
+		fn += source(t.In(i))
+		if (i + 1) != t.NumIn() {
+			fn += ", "
+		}
+	}
+	fn += ") "
+	if t.NumOut() > 1 {
+		fn += "("
+	}
+	for i := 0; i < t.NumOut(); i++ {
+		fn += source(t.Out(i))
+		if (i + 1) != t.NumOut() {
+			fn += ", "
+		}
+	}
+	if t.NumOut() > 1 {
+		fn += ")"
+	}
+	return fn
 }
 
 func methodSignature(m *reflect.Method) string {
-	src:=m.Name+"("
-	for i:=0;i<m.Type.NumIn();i++ {
-		arg:=m.Type.In(i)
-		src+=typename(arg)
-		if i!=m.Type.NumIn() {
-			src+=", "
+	src := m.Name + "("
+	for i := 0; i < m.Type.NumIn(); i++ {
+		arg := m.Type.In(i)
+		src += typename(arg)
+		if i != m.Type.NumIn() {
+			src += ", "
 		}
 	}
-	src+=") "
-	if m.Type.NumOut()>1 {
-		src+="("
+	src += ") "
+	if m.Type.NumOut() > 1 {
+		src += "("
 	}
-	for i:=0;i<m.Type.NumOut();i++ {
-		arg:=m.Type.Out(i)
-		src+=typename(arg)
-		if i!=m.Type.NumOut() {
-			src+=", "
+	for i := 0; i < m.Type.NumOut(); i++ {
+		arg := m.Type.Out(i)
+		src += typename(arg)
+		if i != m.Type.NumOut() {
+			src += ", "
 		}
 	}
-	if m.Type.NumOut()>1 {
-		src+=")"
+	if m.Type.NumOut() > 1 {
+		src += ")"
 	}
 	return src
 }
 
 func typename(t reflect.Type) string {
-	if t.Kind()==reflect.Ptr {
-		return "*"+typename(t.Elem())
+	if t.Kind() == reflect.Ptr {
+		return "*" + typename(t.Elem())
 	}
-	if t.Kind()==reflect.Array {
-		return "[]"+typename(t.Elem())
+	if t.Kind() == reflect.Array {
+		return "[]" + typename(t.Elem())
 	}
-	return ""
+	return t.Name()
 }
 
 func remotize0(i *ast.Decl) os.Error {

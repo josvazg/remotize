@@ -393,13 +393,21 @@ func remotize0(source string) string {
 
 func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
+	fmt.Fprintf(out, "// Autoregistry")
+	fmt.Fprintf(out, "func init() {\n")
+	fmt.Fprintf(out, "	Register(Local%s{}, Remote%s{})\n", ifacename, ifacename)
+	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Remote rpc server wrapper for %s\n", ifacename)
-	fmt.Fprintf(out, "type Remote%s struct {}\n\n", ifacename)
+	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
+	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(out, "// Remote rpc server implementation binding\n")
+	fmt.Fprintf(out, "func (r Remote%s) Bind(i interface{}) {\n", ifacename)
+	fmt.Fprintf(out, "    r.srv=%s(i)\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
 	fmt.Fprintf(out, "type Local%s struct {\n", ifacename)
-	fmt.Fprintf(out, "    cli rpc.Client\n}\n\n")
+	fmt.Fprintf(out, "    cli *rpc.Client\n")
 	fmt.Fprintf(out, "}\n\n")
 	for _, f := range iface.Methods.List {
 		if ft, ok := f.Type.(*ast.FuncType); ok {

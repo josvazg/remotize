@@ -6,6 +6,7 @@
 package remotize
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -265,9 +266,9 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 // New code
 
 func Remotize0(i interface{}) os.Error {
-	if src, ok := i.([]ast.Decl); ok {
+	/*if src, ok := i.([]ast.Decl); ok {
 		return remotize0(src)
-	}
+	}*/
 	var t reflect.Type
 	if _, ok := i.(reflect.Type); ok {
 		t = i.(reflect.Type)
@@ -275,7 +276,8 @@ func Remotize0(i interface{}) os.Error {
 		t = reflect.TypeOf(i)
 	}
 	if t.Kind() == reflect.Interface || t.NumMethod() > 0 {
-		return remotize0(declare(t))
+		remotize0(declare(t))
+		return nil
 	}
 	if t.Kind() == reflect.Ptr {
 		return Remotize0(t.Elem())
@@ -284,14 +286,15 @@ func Remotize0(i interface{}) os.Error {
 	return nil
 }
 
-func declare(t reflect.Type) []ast.Decl {
+func declare(t reflect.Type) string {
 	switch t.Kind() {
 	case reflect.Interface:
-		return src2ast("type "+t.Name()+ " interface"+methods(t))
+		return "type " + t.Name() + " interface" + methods(t)
 	}
-	st:=t
-	for ;st.Kind()==reflect.Ptr;st=t.Elem() { }
-	return src2ast("type "+st.Name()+"er interface"+methods(t))
+	st := t
+	for ; st.Kind() == reflect.Ptr; st = t.Elem() {
+	}
+	return "type " + st.Name() + "er interface" + methods(t)
 }
 
 func source(t reflect.Type) string {
@@ -318,7 +321,7 @@ func methods(t reflect.Type) string {
 	if t.NumMethod() > 0 {
 		methods := " {"
 		for i := 0; i < t.NumMethod(); i++ {
-			m:=t.Method(i)
+			m := t.Method(i)
 			methods += "\n" + funcsource(t, &m)
 		}
 		methods += "\n}"
@@ -332,12 +335,12 @@ func funcsource(t reflect.Type, m *reflect.Method) string {
 	start := 0
 	if t.Kind() == reflect.Interface {
 		fn = m.Name + "("
-	} else if m!=nil && m.Name != "" {
+	} else if m != nil && m.Name != "" {
 		start++
 		fn = m.Name + "("
 	}
-	if m!=nil {
-		t=m.Type
+	if m != nil {
+		t = m.Type
 	}
 	for i := start; i < t.NumIn(); i++ {
 		fn += source(t.In(i))
@@ -363,16 +366,158 @@ func funcsource(t reflect.Type, m *reflect.Method) string {
 
 func src2ast(src string) []ast.Decl {
 	fmt.Println(src)
-	dcls,e:=parser.ParseDeclList(token.NewFileSet(),"",src)
-	if e!=nil {
+	dcls, e := parser.ParseDeclList(token.NewFileSet(), "", src)
+	if e != nil {
 		panic(e)
 	}
 	return dcls
 }
 
-func remotize0(decls []ast.Decl) os.Error {
-	fmt.Println(len(decls),"declarations")
-	ast.Print(token.NewFileSet(),decls)
-	return nil
+func remotize0(source string) string {
+	decls := src2ast(source)
+	fmt.Println(len(decls), "declarations")
+	ast.Print(token.NewFileSet(), decls)
+	for _, decl := range decls {
+		if gendecl, ok := decl.(*ast.GenDecl); ok {
+			for _, spec := range gendecl.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					if it, ok := ts.Type.(*ast.InterfaceType); ok {
+						return remotizeInterface(it)
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func remotizeInterface(iface *ast.InterfaceType) string {
+	out := bytes.NewBufferString("")
+	for _, f := range iface.Methods.List {
+		if ft, ok := f.Type.(*ast.FuncType); ok {
+			wrapFunction(out, f.Names[0].Name, ft)
+		}
+	}
+	fmt.Println(out.String())
+	return out.String()
+}
+
+
+func wrapFunction(out io.Writer, name string, fun *ast.FuncType) {
+	fmt.Fprintf(out, "// wrapper for: %s\n\n", name)
+	//argcnt := 
+	generateStructWrapper(out, fun.Params, "Args", name)
+	//replycnt := 
+	generateStructWrapper(out, fun.Results, "Reply", name)
+	//generateServerRPCWrapper(out, fun, name, argcnt, replycnt)
+	//generateClientRPCWrapper(out, fun, name, argcnt, replycnt)
+	fmt.Fprintf(out, "\n")
+}
+
+func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname, name string) int {
+	fmt.Fprintf(out, "type %s_%s struct {\n", structname, name)
+	argn := 0
+	if fun == nil {
+		return argn
+	}
+	for _, field := range fun.List {
+		fmt.Fprintf(out, "\t")
+		// names
+		if field.Names != nil {
+			for j, _ := range field.Names {
+				fmt.Fprintf(out, "Arg%d", argn)
+				if j != len(field.Names)-1 {
+					fmt.Fprintf(out, ", ")
+				}
+				argn++
+			}
+			fmt.Fprintf(out, " ")
+		} else {
+			fmt.Fprintf(out, "Arg%d ", argn)
+			argn++
+		}
+
+		// type
+		prettyPrintTypeExpr(out, field.Type)
+
+		// \n
+		fmt.Fprintf(out, "\n")
+	}
+	fmt.Fprintf(out, "}\n")
+	return argn
+}
+
+func prettyPrintTypeExpr(out io.Writer, e ast.Expr) {
+	ty := reflect.TypeOf(e)
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		fmt.Fprintf(out, "*")
+		prettyPrintTypeExpr(out, t.X)
+	case *ast.Ident:
+		fmt.Fprintf(out, t.Name)
+	case *ast.ArrayType:
+		fmt.Fprintf(out, "[]")
+		prettyPrintTypeExpr(out, t.Elt)
+	case *ast.SelectorExpr:
+		prettyPrintTypeExpr(out, t.X)
+		fmt.Fprintf(out, ".%s", t.Sel.Name)
+	case *ast.FuncType:
+		fmt.Fprintf(out, "func(")
+		prettyPrintFuncFieldList(out, t.Params)
+		fmt.Fprintf(out, ")")
+
+		buf := bytes.NewBuffer(make([]byte, 0, 256))
+		nresults := prettyPrintFuncFieldList(buf, t.Results)
+		if nresults > 0 {
+			results := buf.String()
+			if strings.Index(results, " ") != -1 {
+				results = "(" + results + ")"
+			}
+			fmt.Fprintf(out, " %s", results)
+		}
+	case *ast.MapType:
+		fmt.Fprintf(out, "map[")
+		prettyPrintTypeExpr(out, t.Key)
+		fmt.Fprintf(out, "]")
+		prettyPrintTypeExpr(out, t.Value)
+	case *ast.InterfaceType:
+		fmt.Fprintf(out, "interface{}")
+	case *ast.Ellipsis:
+		fmt.Fprintf(out, "...")
+		prettyPrintTypeExpr(out, t.Elt)
+	default:
+		fmt.Fprintf(out, "\n[!!] unknown type: %s\n", ty.String())
+	}
+}
+
+func prettyPrintFuncFieldList(out io.Writer, f *ast.FieldList) int {
+	count := 0
+	if f == nil {
+		return count
+	}
+	for i, field := range f.List {
+		// names
+		if field.Names != nil {
+			for j, name := range field.Names {
+				fmt.Fprintf(out, "%s", name.Name)
+				if j != len(field.Names)-1 {
+					fmt.Fprintf(out, ", ")
+				}
+				count++
+			}
+			fmt.Fprintf(out, " ")
+		} else {
+			count++
+		}
+
+		// type
+		prettyPrintTypeExpr(out, field.Type)
+
+		// ,
+		if i != len(f.List)-1 {
+			fmt.Fprintf(out, ", ")
+		}
+	}
+	return count
 }
 

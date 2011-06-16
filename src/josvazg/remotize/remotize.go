@@ -139,7 +139,7 @@ func find(name string) reflect.Type {
 
 // instatiante returns a Ptr instance of the given type, 
 // if found in the registry, or nil otherwise
-func new(name string) interface{} {
+func ptr(name string) interface{} {
 	t := find(name)
 	if t == nil {
 		return nil
@@ -168,7 +168,7 @@ func NewClient(client *rpc.Client, i interface{}, pack string) Client {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	clt := new(ifacename + "Client")
+	clt := ptr(ifacename + "Client")
 	if clt != nil {
 		c := clt.(Client)
 		c.Bind(client)
@@ -189,7 +189,7 @@ func NewServer(server *rpc.Server, i, impl interface{}, pack string) Server {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	srv := new(ifacename + "Server")
+	srv := ptr(ifacename + "Server")
 	if srv != nil {
 		s := srv.(Server)
 		s.Bind(server, impl)
@@ -297,11 +297,10 @@ func NewRemote(s *rpc.Server, iface interface{}, impl interface{}) interface{} {
 // New Local Instance by Interface
 func NewLocal(c *rpc.Client, iface interface{}) interface{} {
 	ifacename := nameFor(iface)
-	l := new("Local" + ifacename).(Invoker)
+	l := ptr("Local" + ifacename).(Invoker)
 	l.InvokeThrough(c)
 	return (interface{})(l)
 }
-
 
 func Remotize0(i interface{}) os.Error {
 	/*if src, ok := i.([]ast.Decl); ok {
@@ -433,8 +432,21 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n", ifacename, ifacename)
+	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n",
+		ifacename, ifacename)
 	fmt.Fprintf(out, "}\n\n")
+	remoteInit(out, ifacename)
+	localInit(out, ifacename)
+	for _, f := range iface.Methods.List {
+		if ft, ok := f.Type.(*ast.FuncType); ok {
+			wrapFunction(out, ifacename, f.Names[0].Name, ft)
+		}
+	}
+	fmt.Println(out.String())
+	return out.String()
+}
+
+func remoteInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "// Remote rpc server wrapper for %s\n", ifacename)
 	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
@@ -450,6 +462,9 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	fmt.Fprintf(out, "    srv.Register(r)\n")
 	fmt.Fprintf(out, "    return r\n")
 	fmt.Fprintf(out, "}\n\n")
+}
+
+func localInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
 	fmt.Fprintf(out, "type Local%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    cli *rpc.Client\n")
@@ -463,15 +478,7 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 		ifacename, ifacename)
 	fmt.Fprintf(out, "    return &Local%s{cli}\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
-	for _, f := range iface.Methods.List {
-		if ft, ok := f.Type.(*ast.FuncType); ok {
-			wrapFunction(out, ifacename, f.Names[0].Name, ft)
-		}
-	}
-	fmt.Println(out.String())
-	return out.String()
 }
-
 
 func wrapFunction(out io.Writer, iface, name string, fun *ast.FuncType) {
 	fmt.Fprintf(out, "// wrapper for: %s\n\n", name)

@@ -1,7 +1,7 @@
 // Copyright 2010 Jose Luis Vázquez González josvazg@gmail.com
 // Use of this source code is governed by a BSD-style
 
-// remotize package wraps rpc calls so you don't have to rewrite an interface by
+// remotize package wraps rpc calls so you don't hrave to rewrite an interface by
 // hand in order to use it remotely or out-of-process. 
 package remotize
 
@@ -139,7 +139,7 @@ func find(name string) reflect.Type {
 
 // instatiante returns a Ptr instance of the given type, 
 // if found in the registry, or nil otherwise
-func instantiate(name string) interface{} {
+func new(name string) interface{} {
 	t := find(name)
 	if t == nil {
 		return nil
@@ -168,7 +168,7 @@ func NewClient(client *rpc.Client, i interface{}, pack string) Client {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	clt := instantiate(ifacename + "Client")
+	clt := new(ifacename + "Client")
 	if clt != nil {
 		c := clt.(Client)
 		c.Bind(client)
@@ -189,7 +189,7 @@ func NewServer(server *rpc.Server, i, impl interface{}, pack string) Server {
 		dotpos := strings.LastIndex(ifacename, ".")
 		ifacename = pack + "." + ifacename[dotpos:]
 	}
-	srv := instantiate(ifacename + "Server")
+	srv := new(ifacename + "Server")
 	if srv != nil {
 		s := srv.(Server)
 		s.Bind(server, impl)
@@ -264,6 +264,44 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 // Old code
 //------------------------------------------
 // New code
+
+// Remotes (server wrappers) must be Implementers
+type Implementer interface {
+	ImplementedBy(i interface{})
+}
+
+// Locals (client wrappers) must be Invokers
+type Invoker interface {
+	InvokeThrough(cli *rpc.Client)
+}
+
+// build returns a Ptr instance of the given type, 
+// if found in the registry, or nil otherwise
+func zero(name string) interface{} {
+	t := find(name)
+	if t == nil {
+		return nil
+	}
+	return reflect.Zero(t).Interface()
+}
+
+// New Remote Instance by Interface
+func NewRemote(s *rpc.Server, iface interface{}, impl interface{}) interface{} {
+	ifacename := nameFor(iface)
+	r := zero("Remote" + ifacename).(Implementer)
+	r.ImplementedBy(impl)
+	s.Register(r)
+	return (interface{})(r)
+}
+
+// New Local Instance by Interface
+func NewLocal(c *rpc.Client, iface interface{}) interface{} {
+	ifacename := nameFor(iface)
+	l := new("Local" + ifacename).(Invoker)
+	l.InvokeThrough(c)
+	return (interface{})(l)
+}
+
 
 func Remotize0(i interface{}) os.Error {
 	/*if src, ok := i.([]ast.Decl); ok {
@@ -393,21 +431,37 @@ func remotize0(source string) string {
 
 func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
-	fmt.Fprintf(out, "// Autoregistry")
+	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "	Register(Local%s{}, Remote%s{})\n", ifacename, ifacename)
+	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n", ifacename, ifacename)
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Remote rpc server wrapper for %s\n", ifacename)
 	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Remote rpc server implementation binding\n")
-	fmt.Fprintf(out, "func (r Remote%s) Bind(i interface{}) {\n", ifacename)
+	fmt.Fprintf(out, "// Remote rpc server implementation\n")
+	fmt.Fprintf(out, "func (r Remote%s) ImplementedBy(i interface{}) {\n", ifacename)
 	fmt.Fprintf(out, "    r.srv=%s(i)\n", ifacename)
+	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
+	fmt.Fprintf(out, "func NewRemote%s(srv *rpc.Server, impl %s) *Remote%s {\n",
+		ifacename, ifacename, ifacename)
+	fmt.Fprintf(out, "    r:=&Remote%s{impl}\n", ifacename)
+	fmt.Fprintf(out, "    srv.Register(r)\n")
+	fmt.Fprintf(out, "    return r\n")
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
 	fmt.Fprintf(out, "type Local%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    cli *rpc.Client\n")
+	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(out, "// Local rpc client invocation\n")
+	fmt.Fprintf(out, "func (l Local%s) InvokeThrough(cli *rpc.Client) {\n", ifacename)
+	fmt.Fprintf(out, "    l.cli=cli\n")
+	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(out, "// Direct Local%s constructor\n", ifacename)
+	fmt.Fprintf(out, "func NewLocal%s(cli *rpc.Client) *Local%s {\n",
+		ifacename, ifacename)
+	fmt.Fprintf(out, "    return &Local%s{cli}\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
 	for _, f := range iface.Methods.List {
 		if ft, ok := f.Type.(*ast.FuncType); ok {

@@ -62,6 +62,10 @@ func (sc *Simplecalc) RandomizeSeed(seed float64) {
 	fmt.Println(seed, "randomized!")
 }
 
+func (sc *Simplecalc) Connect(r io.Reader) io.Writer {
+	return nil
+}
+
 func copy(orig, dest string) os.Error {
 	r, e := os.Open(orig)
 	if e != nil {
@@ -106,7 +110,7 @@ func TestRemotize(t *test.T) {
 	runRemotizedCalc(t)*/
 	fmt.Println("Testing new remotize code on *simplecalc...")
 	Remotize0(&Simplecalc{})
-	Remotize0(new(Calc))
+	//Remotize0(new(Calc))
 }
 
 func autoremotize(t *test.T) {

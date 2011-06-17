@@ -15,6 +15,7 @@ import (
 	"os"
 	"reflect"
 	"rpc"
+	//"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -430,6 +431,7 @@ func remotize0(source string) string {
 
 func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
+	imports(out, iface)
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
 	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n",
@@ -444,6 +446,63 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	}
 	fmt.Println(out.String())
 	return out.String()
+}
+
+func imports(out io.Writer, iface *ast.InterfaceType) {
+	imports := []string{"remotize", "rpc"}
+	for _, f := range iface.Methods.List {
+		if ft, ok := f.Type.(*ast.FuncType); ok {
+			if ft.Params != nil {
+				for _, f := range ft.Params.List {
+					imports = addImport(imports, f.Type)
+				}
+			}
+			if ft.Results != nil {
+				for _, f := range ft.Results.List {
+					imports = addImport(imports, f.Type)
+				}
+			}
+		}
+	}
+	//sort.SortStrings(imports)
+	fmt.Fprintf(out, "import (\n")
+	for _, imp := range imports {
+		fmt.Fprintf(out, "    \"%s\"\n", imp)
+	}
+	fmt.Fprintf(out, ")\n\n")
+}
+
+func addImport(imports []string, expr ast.Expr) []string {
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		if id, ok := sel.X.(*ast.Ident); ok {
+			done := false
+			for i := 0; i < len(imports) && !done; i++ {
+				if id.Name == imports[i] {
+					done = true
+				} else if id.Name < imports[i] {
+					if i == 0 {
+						fmt.Println("insert", id.Name, "FIRST at", i, "in", imports)
+						newimports := []string{id.Name}
+						fmt.Println("newimports", newimports)
+						imports = append(newimports, imports...)
+					} else {
+						fmt.Println("insert at ", i, "in", imports)
+						newimports := imports[:i-1]
+						fmt.Println("newimports", newimports)
+						newimports = append(newimports, id.Name)
+						fmt.Println("newimports", newimports)
+						imports = append(newimports, imports[i-1:]...)
+					}
+					done = true
+				}
+			}
+			if !done {
+				imports = append(imports, id.Name)
+			}
+			fmt.Println("imports", imports)
+		}
+	}
+	return imports
 }
 
 func remoteInit(out io.Writer, ifacename string) {

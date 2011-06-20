@@ -324,98 +324,146 @@ func Remotize0(i interface{}) os.Error {
 	return nil
 }
 
+type declaration struct {
+	t       reflect.Type
+	src     *bytes.Buffer
+	imports map[string]string
+}
+
 func declare(t reflect.Type) string {
+	var dcl *declaration
 	switch t.Kind() {
 	case reflect.Interface:
-		return "type " + t.Name() + " interface" + methods(t)
+		dcl = newDeclaration(t, "type "+t.Name()+" interface")
+	default:
+		st := t
+		for ; st.Kind() == reflect.Ptr; st = t.Elem() {
+		}
+		dcl = newDeclaration(t, "type "+st.Name()+"er interface")
 	}
-	st := t
-	for ; st.Kind() == reflect.Ptr; st = t.Elem() {
-	}
-	return "type " + st.Name() + "er interface" + methods(t)
+	dcl.methods(t)
+	return dcl.done()
 }
 
-func source(t reflect.Type) string {
-	switch t.Kind() {
-	case reflect.Array:
-		return "[" + strconv.Itoa(t.Len()) + "]" + t.Name() + methods(t)
-	case reflect.Chan:
-		return "chan " + source(t.Elem()) + methods(t)
-	case reflect.Func:
-		return funcsource(t, nil)
-	case reflect.Map:
-		return "map[" + source(t.Key()) + "]" + source(t.Elem()) + methods(t)
-	case reflect.Ptr:
-		return "*" + source(t.Elem()) + methods(t)
-	case reflect.Slice:
-		return "[]" + source(t.Elem()) + methods(t)
-	case reflect.String:
-		return "string" + methods(t)
-	}
-	return t.String()
+func newDeclaration(t reflect.Type, header string) *declaration {
+	return &declaration{t, bytes.NewBufferString(header),
+		make(map[string]string)}
 }
 
-func methods(t reflect.Type) string {
+func (d *declaration) methods(t reflect.Type) {
 	if t.NumMethod() > 0 {
-		methods := " {"
+		fmt.Fprintf(d.src, " {")
 		for i := 0; i < t.NumMethod(); i++ {
 			m := t.Method(i)
-			methods += "\n" + funcsource(t, &m)
+			fmt.Fprintf(d.src, "\n    ")
+			d.funcsource(t, &m)
 		}
-		methods += "\n}"
-		return methods
+		fmt.Fprintf(d.src, "\n}")
 	}
-	return ""
 }
 
-func funcsource(t reflect.Type, m *reflect.Method) string {
-	fn := "func ("
+func (d *declaration) funcsource(t reflect.Type, m *reflect.Method) {
 	start := 0
 	if t.Kind() == reflect.Interface {
-		fn = m.Name + "("
+		fmt.Fprintf(d.src, m.Name+"(")
 	} else if m != nil && m.Name != "" {
 		start++
-		fn = m.Name + "("
+		fmt.Fprintf(d.src, m.Name+"(")
+	} else {
+		fmt.Fprintf(d.src, "func (")
 	}
 	if m != nil {
 		t = m.Type
 	}
 	for i := start; i < t.NumIn(); i++ {
-		fn += source(t.In(i))
+		d.source(t.In(i))
 		if (i + 1) != t.NumIn() {
-			fn += ", "
+			fmt.Fprintf(d.src, ", ")
 		}
 	}
-	fn += ") "
+	fmt.Fprintf(d.src, ") ")
 	if t.NumOut() > 1 {
-		fn += "("
+		fmt.Fprintf(d.src, "(")
 	}
 	for i := 0; i < t.NumOut(); i++ {
-		fn += source(t.Out(i))
+		d.source(t.Out(i))
 		if (i + 1) != t.NumOut() {
-			fn += ", "
+			fmt.Fprintf(d.src, ", ")
 		}
 	}
 	if t.NumOut() > 1 {
-		fn += ")"
+		fmt.Fprintf(d.src, ")")
 	}
-	return fn
 }
 
-func src2ast(src string) []ast.Decl {
+func (d *declaration) source(t reflect.Type) {
+	switch t.Kind() {
+	case reflect.Array:
+		fmt.Fprintf(d.src, "["+strconv.Itoa(t.Len())+"]"+t.Name())
+	case reflect.Chan:
+		fmt.Fprintf(d.src, "chan ")
+		d.source(t.Elem())
+	case reflect.Func:
+		d.funcsource(t, nil)
+	case reflect.Map:
+		fmt.Fprintf(d.src, "map[")
+		d.source(t.Key())
+		fmt.Fprintf(d.src, "]")
+		d.source(t.Elem())
+	case reflect.Ptr:
+		fmt.Fprintf(d.src, "*")
+		d.source(t.Elem())
+	case reflect.Slice:
+		fmt.Fprintf(d.src, "[]")
+		d.source(t.Elem())
+	case reflect.String:
+		fmt.Fprintf(d.src, "string")
+	default:
+		d.pack(t)
+		fmt.Fprintf(d.src, t.String())
+		return
+	}
+	d.methods(t)
+}
+
+func (d *declaration) pack(t reflect.Type) {
+	packpath := t.PkgPath()
+	if packpath != "" {
+		alias := t.String()[0 : len(t.String())-len(t.Name())-1]
+		d.imports[alias] = packpath
+	}
+}
+
+func (d *declaration) done() string {
+	buf := bytes.NewBufferString("package unknown\n\n")
+	if len(d.imports) > 0 {
+		fmt.Fprintf(buf, "import (\n")
+		for _, i := range d.imports {
+			v := d.imports[i]
+			if i == v {
+				fmt.Fprintf(buf, "    \"%v\"\n", i)
+			} else {
+				fmt.Fprintf(buf, "    %v \"%v\"\n", v, i)
+			}
+		}
+	}
+	fmt.Fprintf(buf, ")\n\n")
+	return buf.String() + d.src.String()
+}
+
+func src2ast(src string) *ast.File {
 	fmt.Println(src)
-	dcls, e := parser.ParseDeclList(token.NewFileSet(), "", src)
+	f, e := parser.ParseFile(token.NewFileSet(), "", src, 0)
 	if e != nil {
 		panic(e)
 	}
-	return dcls
+	return f
 }
 
 func remotize0(source string) string {
-	decls := src2ast(source)
-	fmt.Println(len(decls), "declarations")
-	ast.Print(token.NewFileSet(), decls)
-	for _, decl := range decls {
+	f := src2ast(source)
+	//ast.Print(token.NewFileSet(), f)
+	for _, decl := range f.Decls {
 		if gendecl, ok := decl.(*ast.GenDecl); ok {
 			for _, spec := range gendecl.Specs {
 				if ts, ok := spec.(*ast.TypeSpec); ok {
@@ -431,7 +479,6 @@ func remotize0(source string) string {
 
 func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
-	imports(out, iface)
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
 	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n",
@@ -446,63 +493,6 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	}
 	fmt.Println(out.String())
 	return out.String()
-}
-
-func imports(out io.Writer, iface *ast.InterfaceType) {
-	imports := []string{"remotize", "rpc"}
-	for _, f := range iface.Methods.List {
-		if ft, ok := f.Type.(*ast.FuncType); ok {
-			if ft.Params != nil {
-				for _, f := range ft.Params.List {
-					imports = addImport(imports, f.Type)
-				}
-			}
-			if ft.Results != nil {
-				for _, f := range ft.Results.List {
-					imports = addImport(imports, f.Type)
-				}
-			}
-		}
-	}
-	//sort.SortStrings(imports)
-	fmt.Fprintf(out, "import (\n")
-	for _, imp := range imports {
-		fmt.Fprintf(out, "    \"%s\"\n", imp)
-	}
-	fmt.Fprintf(out, ")\n\n")
-}
-
-func addImport(imports []string, expr ast.Expr) []string {
-	if sel, ok := expr.(*ast.SelectorExpr); ok {
-		if id, ok := sel.X.(*ast.Ident); ok {
-			done := false
-			for i := 0; i < len(imports) && !done; i++ {
-				if id.Name == imports[i] {
-					done = true
-				} else if id.Name < imports[i] {
-					if i == 0 {
-						fmt.Println("insert", id.Name, "FIRST at", i, "in", imports)
-						newimports := []string{id.Name}
-						fmt.Println("newimports", newimports)
-						imports = append(newimports, imports...)
-					} else {
-						fmt.Println("insert at ", i, "in", imports)
-						newimports := imports[:i-1]
-						fmt.Println("newimports", newimports)
-						newimports = append(newimports, id.Name)
-						fmt.Println("newimports", newimports)
-						imports = append(newimports, imports[i-1:]...)
-					}
-					done = true
-				}
-			}
-			if !done {
-				imports = append(imports, id.Name)
-			}
-			fmt.Println("imports", imports)
-		}
-	}
-	return imports
 }
 
 func remoteInit(out io.Writer, ifacename string) {

@@ -303,50 +303,67 @@ func NewLocal(c *rpc.Client, iface interface{}) interface{} {
 	return (interface{})(l)
 }
 
-func Remotize0(i interface{}) os.Error {
-	/*if src, ok := i.([]ast.Decl); ok {
-		return remotize0(src)
-	}*/
+func Remotize0(packname string, i interface{}) os.Error {
 	var t reflect.Type
 	if _, ok := i.(reflect.Type); ok {
 		t = i.(reflect.Type)
 	} else {
 		t = reflect.TypeOf(i)
 	}
-	if t.Kind() == reflect.Interface || t.NumMethod() > 0 {
-		remotize0(declare(t))
+	if t.Kind() == reflect.Interface {
+		header, declaration := declare(packname, t)
+		body := remotize0(header + declaration)
+		save(strings.ToLower(t.Name())+"Remotized.go", header+body)
+		return nil
+	} else if t.NumMethod() > 0 {
+		header, decl := declare(packname, t)
+		body := remotize0(header + decl)
+		st := t
+		for ; st.Kind() == reflect.Ptr; st = st.Elem() {
+		}
+		save(strings.ToLower(st.Name())+"Remotized.go", header+decl+body)
 		return nil
 	}
 	if t.Kind() == reflect.Ptr {
-		return Remotize0(t.Elem())
+		return Remotize0(packname, t.Elem())
 	}
 	// TODO error
 	return nil
 }
 
-type declaration struct {
-	t       reflect.Type
-	src     *bytes.Buffer
-	imports map[string]string
+func save(filename, contents string) {
+	f, e := os.Create(filename)
+	if e != nil {
+		panic(e)
+	}
+	f.Write(([]byte)(contents))
+	f.Close()
 }
 
-func declare(t reflect.Type) string {
+type declaration struct {
+	t        reflect.Type
+	packname string
+	src      *bytes.Buffer
+	imports  map[string]string
+}
+
+func declare(packname string, t reflect.Type) (header string, decl string) {
 	var dcl *declaration
 	switch t.Kind() {
 	case reflect.Interface:
-		dcl = newDeclaration(t, "type "+t.Name()+" interface")
+		dcl = newDeclaration(t, packname, "type "+t.Name()+" interface")
 	default:
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = t.Elem() {
 		}
-		dcl = newDeclaration(t, "type "+st.Name()+"er interface")
+		dcl = newDeclaration(t, packname, "type "+st.Name()+"er interface")
 	}
 	dcl.methods(t)
-	return dcl.done()
+	return dcl.header(), dcl.src.String()
 }
 
-func newDeclaration(t reflect.Type, header string) *declaration {
-	return &declaration{t, bytes.NewBufferString(header),
+func newDeclaration(t reflect.Type, packname, header string) *declaration {
+	return &declaration{t, packname, bytes.NewBufferString(header),
 		make(map[string]string)}
 }
 
@@ -358,7 +375,7 @@ func (d *declaration) methods(t reflect.Type) {
 			fmt.Fprintf(d.src, "\n    ")
 			d.funcsource(t, &m)
 		}
-		fmt.Fprintf(d.src, "\n}")
+		fmt.Fprintf(d.src, "\n}\n\n")
 	}
 }
 
@@ -434,8 +451,12 @@ func (d *declaration) pack(t reflect.Type) {
 	}
 }
 
-func (d *declaration) done() string {
-	buf := bytes.NewBufferString("package unknown\n\n")
+func (d *declaration) header() string {
+	buf := bytes.NewBufferString("package " + d.packname + "\n\n")
+	d.imports["rpc"] = "rpc"
+	if d.packname != "remotize" {
+		d.imports["remotize"] = "remotize"
+	}
 	if len(d.imports) > 0 {
 		fmt.Fprintf(buf, "import (\n")
 		for _, i := range d.imports {
@@ -446,9 +467,9 @@ func (d *declaration) done() string {
 				fmt.Fprintf(buf, "    %v \"%v\"\n", v, i)
 			}
 		}
+		fmt.Fprintf(buf, ")\n\n")
 	}
-	fmt.Fprintf(buf, ")\n\n")
-	return buf.String() + d.src.String()
+	return buf.String()
 }
 
 func src2ast(src string) *ast.File {
@@ -502,7 +523,7 @@ func remoteInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Remote rpc server implementation\n")
 	fmt.Fprintf(out, "func (r Remote%s) ImplementedBy(i interface{}) {\n", ifacename)
-	fmt.Fprintf(out, "    r.srv=%s(i)\n", ifacename)
+	fmt.Fprintf(out, "    r.srv=i.(%s)\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
 	fmt.Fprintf(out, "func NewRemote%s(srv *rpc.Server, impl %s) *Remote%s {\n",
@@ -540,8 +561,9 @@ func wrapFunction(out io.Writer, iface, name string, fun *ast.FuncType) {
 
 func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname, name string) int {
 	fmt.Fprintf(out, "type %s_%s struct {\n", structname, name)
+	defer fmt.Fprintf(out, "}\n\n")
 	argn := 0
-	if fun == nil {
+	if fun == nil || len(fun.List) == 0 {
 		return argn
 	}
 	for _, field := range fun.List {
@@ -567,7 +589,6 @@ func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname, name s
 		// \n
 		fmt.Fprintf(out, "\n")
 	}
-	fmt.Fprintf(out, "}\n\n")
 	return argn
 }
 

@@ -266,41 +266,60 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 //------------------------------------------
 // New code
 
+// Remotized Registry
+var registry = make(map[string]interface{})
+
 // Remotes (server wrappers) must be Implementers
-type Implementer interface {
-	ImplementedBy(i interface{})
-}
+type BuildRemote func(*rpc.Server, interface{}) interface{}
 
 // Locals (client wrappers) must be Invokers
-type Invoker interface {
-	InvokeThrough(cli *rpc.Client)
+type BuildLocal func(*rpc.Client) interface{}
+
+func startsWith(str, s string) bool {
+	return len(str) >= len(s) && str[:len(s)] == s
 }
 
-// build returns a Ptr instance of the given type, 
-// if found in the registry, or nil otherwise
-func zero(name string) interface{} {
-	t := find(name)
-	if t == nil {
-		return nil
+func searchName(prefix, ifacename string) string {
+	parts := strings.Split(ifacename, ".", -1)
+	if len(parts) == 2 && !startsWith(parts[1], prefix) {
+		return parts[0] + "." + prefix + parts[1]
 	}
-	return reflect.Zero(t).Interface()
+	return ifacename
+}
+
+func RegisterRemotized(l interface{}, bl BuildLocal,
+r interface{}, br BuildRemote) {
+	cname := fmt.Sprintf("%v", reflect.TypeOf(l))
+	sname := fmt.Sprintf("%v", reflect.TypeOf(r))
+	lock.Lock()
+	defer lock.Unlock()
+	registry[cname] = bl
+	registry[sname] = br
+	fmt.Println("Registry is now", registry)
+}
+
+func registryFind(name string) interface{} {
+	lock.Lock()
+	defer lock.Unlock()
+	return registry[name]
 }
 
 // New Remote Instance by Interface
 func NewRemote(s *rpc.Server, iface interface{}, impl interface{}) interface{} {
-	ifacename := nameFor(iface)
-	r := zero("Remote" + ifacename).(Implementer)
-	r.ImplementedBy(impl)
-	s.Register(r)
-	return (interface{})(r)
+	p := registryFind(searchName("Remote", nameFor(iface)))
+	if p == nil {
+		return nil
+	}
+	return p.(BuildRemote)(s, impl)
 }
 
 // New Local Instance by Interface
 func NewLocal(c *rpc.Client, iface interface{}) interface{} {
-	ifacename := nameFor(iface)
-	l := ptr("Local" + ifacename).(Invoker)
-	l.InvokeThrough(c)
-	return (interface{})(l)
+	p := registryFind(searchName("Local", nameFor(iface)))
+	if p == nil {
+		return nil
+	}
+	return p.(BuildLocal)(c)
 }
 
 func Remotize0(packname string, i interface{}) os.Error {
@@ -502,8 +521,13 @@ func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "    Register(Local%s{}, Remote%s{})\n",
-		ifacename, ifacename)
+	fmt.Fprintf(out, "    RegisterRemotized(Local%s{},\n", ifacename)
+	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
+		"{ return NewLocal%s(cli) },\n", ifacename)
+	fmt.Fprintf(out, "        Remote%s{},\n", ifacename)
+	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
+		" interface{} { return NewRemote%s(srv,i.(%s)) },\n", ifacename, ifacename)
+	fmt.Fprintf(out, "    )\n")
 	fmt.Fprintf(out, "}\n\n")
 	remoteInit(out, ifacename)
 	localInit(out, ifacename)
@@ -521,10 +545,6 @@ func remoteInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Remote rpc server implementation\n")
-	fmt.Fprintf(out, "func (r Remote%s) ImplementedBy(i interface{}) {\n", ifacename)
-	fmt.Fprintf(out, "    r.srv=i.(%s)\n", ifacename)
-	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
 	fmt.Fprintf(out, "func NewRemote%s(srv *rpc.Server, impl %s) *Remote%s {\n",
 		ifacename, ifacename, ifacename)
@@ -538,10 +558,6 @@ func localInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
 	fmt.Fprintf(out, "type Local%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    cli *rpc.Client\n")
-	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Local rpc client invocation\n")
-	fmt.Fprintf(out, "func (l Local%s) InvokeThrough(cli *rpc.Client) {\n", ifacename)
-	fmt.Fprintf(out, "    l.cli=cli\n")
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Direct Local%s constructor\n", ifacename)
 	fmt.Fprintf(out, "func NewLocal%s(cli *rpc.Client) *Local%s {\n",

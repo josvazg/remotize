@@ -279,12 +279,24 @@ func startsWith(str, s string) bool {
 	return len(str) >= len(s) && str[:len(s)] == s
 }
 
+func endsWith(str, s string) bool {
+	return len(str) >= len(s) && str[len(str)-len(s):] == s
+}
+
 func searchName(prefix, ifacename string) string {
-	parts := strings.Split(ifacename, ".", -1)
-	if len(parts) == 2 && !startsWith(parts[1], prefix) {
-		return parts[0] + "." + prefix + parts[1]
+	s := ""
+	if !endsWith(ifacename, "er") {
+		s = "er"
 	}
-	return ifacename
+	parts := strings.Split(ifacename, ".", -1)
+	if len(parts) == 2 {
+		p := ""
+		if !startsWith(parts[1], prefix) {
+			p = prefix
+		}
+		return parts[0] + "." + p + parts[1] + s
+	}
+	return ifacename + s
 }
 
 func RegisterRemotized(l interface{}, bl BuildLocal,
@@ -300,12 +312,18 @@ r interface{}, br BuildRemote) {
 
 func registryFind(name string) interface{} {
 	lock.Lock()
+	fmt.Println(name, "in", registry, "?")
 	defer lock.Unlock()
 	return registry[name]
 }
 
 // New Remote Instance by Interface
-func NewRemote(s *rpc.Server, iface interface{}, impl interface{}) interface{} {
+func NewRemote(s *rpc.Server, ifaceimpl interface{}) interface{} {
+	return NewRemoteWith(s, ifaceimpl, ifaceimpl)
+}
+
+func NewRemoteWith(s *rpc.Server, iface interface{},
+impl interface{}) interface{} {
 	p := registryFind(searchName("Remote", nameFor(iface)))
 	if p == nil {
 		return nil

@@ -283,20 +283,26 @@ func endsWith(str, s string) bool {
 	return len(str) >= len(s) && str[len(str)-len(s):] == s
 }
 
-func searchName(prefix, ifacename string) string {
-	s := ""
-	if !endsWith(ifacename, "er") {
-		s = "er"
+func endsWithVowel(str string) bool {
+	vowels := []string{"a", "e", "i", "o", "u"}
+	for _, v := range vowels {
+		if str[len(str)-len(v):] == v {
+			return true
+		}
 	}
+	return false
+}
+
+func searchName(prefix, ifacename string) string {
 	parts := strings.Split(ifacename, ".", -1)
 	if len(parts) == 2 {
 		p := ""
 		if !startsWith(parts[1], prefix) {
 			p = prefix
 		}
-		return parts[0] + "." + p + parts[1] + s
+		return parts[0] + "." + p + parts[1] + suffix(ifacename)
 	}
-	return ifacename + s
+	return ifacename + suffix(ifacename)
 }
 
 func RegisterRemotized(l interface{}, bl BuildLocal,
@@ -340,7 +346,7 @@ func NewLocal(c *rpc.Client, iface interface{}) interface{} {
 	return p.(BuildLocal)(c)
 }
 
-func Remotize0(packname string, i interface{}) os.Error {
+func Remotize0(i interface{}) os.Error {
 	var t reflect.Type
 	if _, ok := i.(reflect.Type); ok {
 		t = i.(reflect.Type)
@@ -348,12 +354,12 @@ func Remotize0(packname string, i interface{}) os.Error {
 		t = reflect.TypeOf(i)
 	}
 	if t.Kind() == reflect.Interface {
-		header, declaration := declare(packname, t)
+		header, declaration := declare(t)
 		body := remotize0(header + declaration)
 		save(strings.ToLower(t.Name())+"Remotized.go", header+body)
 		return nil
 	} else if t.NumMethod() > 0 {
-		header, decl := declare(packname, t)
+		header, decl := declare(t)
 		body := remotize0(header + decl)
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = st.Elem() {
@@ -362,7 +368,7 @@ func Remotize0(packname string, i interface{}) os.Error {
 		return nil
 	}
 	if t.Kind() == reflect.Ptr {
-		return Remotize0(packname, t.Elem())
+		return Remotize0(t.Elem())
 	}
 	// TODO error
 	return nil
@@ -378,29 +384,41 @@ func save(filename, contents string) {
 }
 
 type declaration struct {
-	t        reflect.Type
-	packname string
-	src      *bytes.Buffer
-	imports  map[string]string
+	t       reflect.Type
+	src     *bytes.Buffer
+	imports map[string]string
 }
 
-func declare(packname string, t reflect.Type) (header string, decl string) {
+func suffix(name string) string {
+	s := ""
+	if !endsWith(name, "er") {
+		if endsWithVowel(name) {
+			s = "r"
+		} else {
+			s = "er"
+		}
+	}
+	return s
+}
+
+func declare(t reflect.Type) (header string, decl string) {
 	var dcl *declaration
 	switch t.Kind() {
 	case reflect.Interface:
-		dcl = newDeclaration(t, packname, "type "+t.Name()+" interface")
+		dcl = newDeclaration(t, "type "+t.Name()+" interface")
 	default:
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = t.Elem() {
 		}
-		dcl = newDeclaration(t, packname, "type "+st.Name()+"er interface")
+		dcl = newDeclaration(t, "type "+st.Name()+suffix(st.Name())+
+			" interface")
 	}
 	dcl.methods(t)
 	return dcl.header(), dcl.src.String()
 }
 
-func newDeclaration(t reflect.Type, packname, header string) *declaration {
-	return &declaration{t, packname, bytes.NewBufferString(header),
+func newDeclaration(t reflect.Type, header string) *declaration {
+	return &declaration{t, bytes.NewBufferString(header),
 		make(map[string]string)}
 }
 
@@ -488,10 +506,23 @@ func (d *declaration) pack(t reflect.Type) {
 	}
 }
 
+func packname(t reflect.Type) string {
+	if t.Kind() == reflect.Ptr {
+		return packname(t.Elem())
+	}
+	path := t.PkgPath()
+	parts := strings.Split(path, ".", -1)
+	if parts == nil && len(parts) == 1 {
+		return path
+	}
+	return parts[len(parts)-1]
+}
+
 func (d *declaration) header() string {
-	buf := bytes.NewBufferString("package " + d.packname + "\n\n")
+	packname := packname(d.t)
+	buf := bytes.NewBufferString("package " + packname + "\n\n")
 	d.imports["rpc"] = "rpc"
-	if d.packname != "remotize" {
+	if packname != "remotize" {
 		d.imports["remotize"] = "remotize"
 	}
 	if len(d.imports) > 0 {
@@ -521,12 +552,16 @@ func src2ast(src string) *ast.File {
 func remotize0(source string) string {
 	f := src2ast(source)
 	//ast.Print(token.NewFileSet(), f)
+	rprefix := "remotize."
+	if f.Name.Name == "remotize" {
+		rprefix = ""
+	}
 	for _, decl := range f.Decls {
 		if gendecl, ok := decl.(*ast.GenDecl); ok {
 			for _, spec := range gendecl.Specs {
 				if ts, ok := spec.(*ast.TypeSpec); ok {
 					if it, ok := ts.Type.(*ast.InterfaceType); ok {
-						return remotizeInterface(ts.Name.Name, it)
+						return remotizeInterface(rprefix, ts.Name.Name, it)
 					}
 				}
 			}
@@ -535,16 +570,19 @@ func remotize0(source string) string {
 	return ""
 }
 
-func remotizeInterface(ifacename string, iface *ast.InterfaceType) string {
+func remotizeInterface(rprefix, ifacename string,
+iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "    RegisterRemotized(Local%s{},\n", ifacename)
+	fmt.Fprintf(out, "    %sRegisterRemotized(Local%s{},\n",
+		rprefix, ifacename)
 	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
-		"{ return NewLocal%s(cli) },\n", ifacename)
+		"{ return %sNewLocal%s(cli) },\n", ifacename)
 	fmt.Fprintf(out, "        Remote%s{},\n", ifacename)
 	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
-		" interface{} { return NewRemote%s(srv,i.(%s)) },\n", ifacename, ifacename)
+		" interface{} { return NewRemote%s(srv,i.(%s)) },\n",
+		ifacename, ifacename)
 	fmt.Fprintf(out, "    )\n")
 	fmt.Fprintf(out, "}\n\n")
 	remoteInit(out, ifacename)
@@ -612,7 +650,8 @@ func prepareInOuts(params *ast.FieldList, r *ast.FieldList) (*ast.FieldList,
 	return r, inouts
 }
 
-func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname, name string) int {
+func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname,
+name string) int {
 	fmt.Fprintf(out, "type %s_%s struct {\n", structname, name)
 	defer fmt.Fprintf(out, "}\n\n")
 	argn := 0

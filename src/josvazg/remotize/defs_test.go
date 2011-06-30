@@ -7,9 +7,37 @@ import (
 	"os"
 	"strconv"
 )
+// Some type without interface
+// (Remotize)
+type URLStore struct {
+
+}
+
+func (s *URLStore) Get(key string) string {
+	fmt.Println("Get(", key, ") (implementation irrelevant)")
+	return "something"
+}
+
+func (s *URLStore) Set(key, url string) bool {
+	fmt.Println("Set(", key, ",", url, ") (implementation irrelevant)")
+	return true
+}
+
+// Some interface
+// (Remotize)
+type Calcer interface {
+	Add(float64, float64) float64
+	AddTo(*float64, float64)
+	Connect(io.Reader) io.Writer
+	Divide(float64, float64) (float64, os.Error)
+	Multiply(float64, float64) float64
+	Pi() float64
+	Randomize()
+	RandomizeSeed(float64)
+	Subtract(float64, float64) float64
+}
 
 // The type implementing it
-// (Remotize)
 type Calc struct{}
 
 func (c *Calc) Add(op1 float64, op2 float64) float64 {

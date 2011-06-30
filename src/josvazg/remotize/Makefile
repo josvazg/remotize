@@ -3,5 +3,5 @@ include $(GOROOT)/src/Make.inc
 TARG=remotize
 GOFILES=remotize.go codegen.go source.go runtime.go
 
-include ./Make.prepkg
-
+include $(GOROOT)/src/Make.pkg
+#include ./Make.prepkg

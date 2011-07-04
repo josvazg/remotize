@@ -356,7 +356,7 @@ func Remotize0(i interface{}) os.Error {
 	if t.Kind() == reflect.Interface {
 		header, declaration := declare(t)
 		body := remotize0(header + declaration)
-		save(strings.ToLower(t.Name())+"Remotized.go", header+body)
+		save("remotized"+t.Name()+".go", header+body)
 		return nil
 	} else if t.NumMethod() > 0 {
 		header, decl := declare(t)
@@ -364,7 +364,7 @@ func Remotize0(i interface{}) os.Error {
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = st.Elem() {
 		}
-		save(strings.ToLower(st.Name())+"Remotized.go", header+decl+body)
+		save("remotized"+st.Name()+".go", header+decl+body)
 		return nil
 	}
 	if t.Kind() == reflect.Ptr {
@@ -522,6 +522,7 @@ func (d *declaration) header() string {
 	packname := packname(d.t)
 	buf := bytes.NewBufferString("package " + packname + "\n\n")
 	d.imports["rpc"] = "rpc"
+	d.imports["os"] = "os"
 	if packname != "remotize" {
 		d.imports["remotize"] = "remotize"
 	}
@@ -541,7 +542,7 @@ func (d *declaration) header() string {
 }
 
 func src2ast(src string) *ast.File {
-	fmt.Println(src)
+	//fmt.Println(src)
 	f, e := parser.ParseFile(token.NewFileSet(), "", src, 0)
 	if e != nil {
 		panic(e)
@@ -578,7 +579,7 @@ iface *ast.InterfaceType) string {
 	fmt.Fprintf(out, "    %sRegisterRemotized(Local%s{},\n",
 		rprefix, ifacename)
 	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
-		"{ return %sNewLocal%s(cli) },\n", ifacename)
+		"{ return NewLocal%s(cli) },\n", ifacename)
 	fmt.Fprintf(out, "        Remote%s{},\n", ifacename)
 	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
 		" interface{} { return NewRemote%s(srv,i.(%s)) },\n",
@@ -592,7 +593,7 @@ iface *ast.InterfaceType) string {
 			wrapFunction(out, ifacename, f.Names[0].Name, ft)
 		}
 	}
-	fmt.Println(out.String())
+	//fmt.Println(out.String())
 	return out.String()
 }
 

@@ -31,7 +31,28 @@ func copy(orig, dest string) os.Error {
 func TestRemotize(t *test.T) {
 	Remotize0(new(Calcer))
 	Remotize0(&URLStore{})
-
+	o, e := runCmd(gocompile(), "-o", "subtest/subtest.8", "remotize.go",
+		"remotizedCalcer.go", "remotizedURLStore.go",
+		"defs_test.go", "subtest.go")
+	if e != nil {
+		t.Fatal(string(o) + e.String())
+		return
+	}
+	o, e = runCmd(gocompile(), "-o", "subtestmain.8", "-I", "subtest")
+	if e != nil {
+		t.Fatal(string(o) + e.String())
+		return
+	}
+	o, e = runCmd(golink(), "-o", "subtest", "subtest.8", "subtestmain.8")
+	if e != nil {
+		t.Fatal(string(o) + e.String())
+		return
+	}
+	o, e = runCmd("./subtest")
+	if e != nil {
+		t.Fatal(string(o) + e.String())
+		return
+	}
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")
 	e := Remotize(&SimpleCalc{})
 	if e != nil {

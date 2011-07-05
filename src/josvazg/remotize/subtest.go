@@ -7,7 +7,7 @@ import (
 	test "testing"
 )
 
-func TestCalcer(t *test.T) {
+func TestRemotizedCalc(t *test.T) {
 	server := rpc.NewServer()
 	r := NewRemote(server, new(Calc))
 	if r == nil {

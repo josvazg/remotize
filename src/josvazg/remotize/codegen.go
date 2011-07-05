@@ -202,13 +202,17 @@ func build(r *rinfo) os.Error {
 	if e != nil {
 		return e
 	}
-	if e = runCmd(gocompile(), "-I", "_test", filename+".go"); e != nil {
+	if o, e := runCmd(gocompile(), "-I", "_test", filename+".go"); e != nil {
+		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
-	if e = runCmd(golink(), "-L", "_test", "-o", filename, filename+"."+goext()); e != nil {
+	if o, e := runCmd(golink(), "-L", "_test", "-o", filename,
+		filename+"."+goext()); e != nil {
+		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
-	if e = runCmd("./" + filename); e != nil {
+	if o, e := runCmd("./" + filename); e != nil {
+		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
 	return nil
@@ -507,9 +511,9 @@ func inouts(m methodSpec) []int {
 }
 
 // runs a command
-func runCmd(cmdargs ...string) os.Error {
+func runCmd(cmdargs ...string) ([]byte, os.Error) {
 	fmt.Println(cmdargs)
-	return exec.Command(cmdargs[0], cmdargs[1:]...).Run()
+	return exec.Command(cmdargs[0], cmdargs[1:]...).CombinedOutput()
 }
 
 // dictionary cache

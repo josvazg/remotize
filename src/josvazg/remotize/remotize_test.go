@@ -31,26 +31,44 @@ func copy(orig, dest string) os.Error {
 func TestRemotize(t *test.T) {
 	Remotize0(new(Calcer))
 	Remotize0(&URLStore{})
-	o, e := runCmd(gocompile(), "-o", "subtest/subtest.8", "remotize.go",
-		"remotizedCalcer.go", "remotizedURLStore.go",
-		"defs_test.go", "subtest.go")
-	if e != nil {
-		t.Fatal(string(o) + e.String())
+	if e := os.MkdirAll("_subtest", 0755); e != nil {
+		t.Fatal(e.String())
 		return
 	}
-	o, e = runCmd(gocompile(), "-o", "subtestmain.8", "-I", "subtest")
-	if e != nil {
+	if o, e := runCmd(gocompile(), "-o", "_subtest/remotize."+goext(),
+		"remotize.go", "remotizedCalcer.go", "remotizedURLStore.go",
+		"defs_test.go", "subtest.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
+	} else {
+		fmt.Println(string(o))
 	}
-	o, e = runCmd(golink(), "-o", "subtest", "subtest.8", "subtestmain.8")
-	if e != nil {
+	if o, e := runCmd(gocompile(), "-o", "subtestmain."+goext(), "-I",
+		"_subtest", "subtestmain.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
+	} else {
+		fmt.Println(string(o))
 	}
-	o, e = runCmd("./subtest")
-	if e != nil {
+	if o, e := runCmd(golink(), "-o", "subtest", "-L", "_subtest",
+		"subtestmain."+goext()); e != nil {
 		t.Fatal(string(o) + e.String())
+		return
+	} else {
+		fmt.Println(string(o))
+	}
+	if o, e := runCmd("./subtest"); e != nil {
+		t.Fatal(string(o) + e.String())
+		return
+	} else {
+		fmt.Println(string(o))
+	}
+	if e := os.RemoveAll("remotizedCalcer.go"); e != nil {
+		t.Fatal(e.String())
+		return
+	}
+	if e := os.RemoveAll("remotizedURLStore.go"); e != nil {
+		t.Fatal(e.String())
 		return
 	}
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"os"
 	"sort"
@@ -127,10 +128,6 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 	if !ok {
 		return
 	}
-	_, ok = tspec.Type.(*ast.InterfaceType)
-	if !ok {
-		return
-	}
 	name := fixPack(r, tspec.Name.Name)
 	i := len(decl.Doc.List) - 1
 	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
@@ -141,6 +138,12 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
 			if _, ok := r.items[name]; ok {
 				return
+			}
+			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
+				printer.Fprint(os.Stdout, token.NewFileSet(), tspec)
+				fmt.Println("")
+			} else {
+				fmt.Println(tspec, "is a Type")
 			}
 			pos := r.fset.Position(tspec.Pos())
 			r.items[name] = &itemInfo{&pos, true}
@@ -179,6 +182,7 @@ func parseFile(r *rinfo, file *ast.File) {
 	r.currpack = file.Name.Name
 	parseImports(r, file)
 	parseRemotizeDemands(r, file)
+	//ast.Print(token.NewFileSet(), file)
 }
 
 /*
@@ -186,7 +190,7 @@ func parseFile(r *rinfo, file *ast.File) {
 		- Are defined with a comment including '(remotize)' at the end
 		- Are used within remotize.NewClient(), NewServer() or PleaseRemotize() Calls 
 */
-func Autoremotize(path string, files []string) (int, os.Error) {
+func Autoremotize(path string, files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
 	rs.fset = token.NewFileSet()
@@ -209,10 +213,10 @@ func Autoremotize(path string, files []string) (int, os.Error) {
 	for name, pos := range rs.items {
 		fmt.Println(name, "at", pos)
 	}
-	e := build(rs)
+	/*e := build(rs)
 	if e != nil {
 		fmt.Println("Error:", e)
-	}
+	}*/
 	return done, nil
 }
 

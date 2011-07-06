@@ -71,6 +71,7 @@ func TestRemotize(t *test.T) {
 		t.Fatal(e.String())
 		return
 	}
+	Autoremotize(".", "defs_test.go")
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")
 	e := Remotize(&SimpleCalc{})
 	if e != nil {
@@ -125,7 +126,7 @@ func TestRemotize(t *test.T) {
 	fmt.Println("1123.1234/-2.21432=", d, " e=", e)
 	fmt.Println("pi=", c.Pi())*/
 }
-
+/*
 func autoremotize(t *test.T) {
 	n, e := Autoremotize(".", []string{"remotize_test.go"})
 	if e != nil {
@@ -138,6 +139,7 @@ func autoremotize(t *test.T) {
 func runRemotizedCalc(t *test.T) {
 	// will invoke TestRemotizedCalc test explicitly
 }
+*/
 
 func TestRemotizedCalc(t *test.T) {
 	/*

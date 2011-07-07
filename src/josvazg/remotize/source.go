@@ -18,6 +18,7 @@ type rinfo struct {
 	currpack string
 	aliases  map[string]string
 	sources  map[string]*bytes.Buffer
+	pending  int
 	Imports  *bytes.Buffer
 }
 
@@ -102,8 +103,8 @@ func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
 	// accquire
 }
 
-// parseComment will references to an interface to be remotized if the
-// source code is a type declaration and the comment includes '(remotize)'
+// parseComment will search for interfaces or type with a comment 
+// in the source code ended by '(remotize)' and will mark them for remotization
 func parseComment(r *rinfo, idecl ast.Decl) {
 	decl, ok := (interface{})(idecl).(*ast.GenDecl)
 	if !ok {
@@ -119,7 +120,7 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 	if !ok {
 		return
 	}
-	name := fixPack(r, tspec.Name.Name)
+	name := tspec.Name.Name
 	i := len(decl.Doc.List) - 1
 	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
 	}
@@ -130,15 +131,38 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 			if _, ok := r.sources[name]; ok {
 				return
 			}
-			r.sources[name] = bytes.NewBufferString("type ")
 			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
+				r.sources[name] = bytes.NewBufferString("type ")
 				printer.Fprint(r.sources[name], token.NewFileSet(), tspec)
-				fmt.Fprintf(r.sources[name], "\n")
 			} else {
-				fmt.Fprintf(r.sources[name], name+" interface {\n")
+				r.sources[name] = bytes.NewBufferString("// for " + name +
+					"\ntype ")
+				fmt.Fprintf(r.sources[name], "%s%s interface {",
+					name, suffix(name))
+				r.sources["*"+name] = bytes.NewBufferString("// for*" + name +
+					"\ntype ")
+				fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
+					name, suffix(name))
+				r.pending++
 			}
-			// accquire
 		}
+	}
+}
+
+// parseComment will search for interfaces or type with a comment 
+// in the source code ended by '(remotize)' and will mark them for remotization
+func parseMethods(r *rinfo, idecl ast.Decl) {
+	fdecl, ok := (interface{})(idecl).(*ast.FuncDecl)
+	if !ok || fdecl.Recv == nil {
+		return
+	}
+	recv := solveName(fdecl.Recv.List[0])
+	if r.sources[recv] != nil {
+		method := solveName(fdecl.Name)
+		tmpbuf := bytes.NewBufferString("")
+		printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
+		signature := tmpbuf.String()[4:]
+		fmt.Fprintf(r.sources[recv], "\n\t%s%s", method, signature)
 	}
 }
 
@@ -148,6 +172,22 @@ func parseRemotizeDemands(r *rinfo, file *ast.File) {
 	for _, decl := range file.Decls {
 		parseComment(r, decl)
 		parseRemotizeCalls(r, decl)
+	}
+	if r.pending > 0 {
+		for _, decl := range file.Decls {
+			parseMethods(r, decl)
+		}
+		for recv, src := range r.sources {
+			s := src.String()
+			endsWith := s[len(s)-1:]
+			if endsWith == "{" {
+				r.sources[recv] = nil, false
+			} else if endsWith != "}" {
+				fmt.Fprintf(r.sources[recv], "\n}\n")
+			} else {
+				fmt.Fprintf(r.sources[recv], "\n")
+			}
+		}
 	}
 }
 

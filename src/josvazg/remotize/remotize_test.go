@@ -40,16 +40,22 @@ func TestRemotize(t *test.T) {
 		"defs_test.go", "subtest.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
+	} else {
+		fmt.Println(string(o))
 	}
 	if o, e := runCmd(gocompile(), "-o", "subtestmain."+goext(), "-I",
 		"_subtest", "subtestmain.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
+	} else {
+		fmt.Println(string(o))
 	}
 	if o, e := runCmd(golink(), "-o", "subtest", "-L", "_subtest",
 		"subtestmain."+goext()); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
+	} else {
+		fmt.Println(string(o))
 	}
 	if o, e := runCmd("./subtest"); e != nil {
 		t.Fatal(string(o) + e.String())
@@ -57,6 +63,15 @@ func TestRemotize(t *test.T) {
 	} else {
 		fmt.Println(string(o))
 	}
+	if e := os.RemoveAll("remotizedCalcer.go"); e != nil {
+		t.Fatal(e.String())
+		return
+	}
+	if e := os.RemoveAll("remotizedURLStore.go"); e != nil {
+		t.Fatal(e.String())
+		return
+	}
+	Autoremotize(".", "defs_test.go")
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")
 	e := Remotize(&SimpleCalc{})
 	if e != nil {
@@ -111,7 +126,7 @@ func TestRemotize(t *test.T) {
 	fmt.Println("1123.1234/-2.21432=", d, " e=", e)
 	fmt.Println("pi=", c.Pi())*/
 }
-
+/*
 func autoremotize(t *test.T) {
 	n, e := Autoremotize(".", []string{"remotize_test.go"})
 	if e != nil {
@@ -124,6 +139,7 @@ func autoremotize(t *test.T) {
 func runRemotizedCalc(t *test.T) {
 	// will invoke TestRemotizedCalc test explicitly
 }
+*/
 
 func TestRemotizedCalc(t *test.T) {
 	/*

@@ -2,31 +2,24 @@ package remotize
 
 import (
 	"bytes"
+	"exec"
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"os"
 	"sort"
 	"strings"
 )
 
-// remotize item info
-type itemInfo struct {
-	*token.Position
-	src bool
-}
-
 // remotize spec
 type rinfo struct {
-	currpack      string
-	importAliases map[string]string
-	items         map[string]*itemInfo
-	fset          *token.FileSet
-	Imports       *bytes.Buffer
-	RemotizeList  *bytes.Buffer
+	currpack string
+	aliases  map[string]string
+	sources  map[string]*bytes.Buffer
+	Imports  *bytes.Buffer
 }
-
 
 // suppress will remove the ocurrences of sups strings from s 
 // and return the result
@@ -49,7 +42,7 @@ func fixPack(r *rinfo, name string) string {
 		return r.currpack + "." + name
 	}
 	parts := strings.Split(name, ".", -1)
-	alias := r.importAliases[parts[0]]
+	alias := r.aliases[parts[0]]
 	if alias == "" {
 		return name
 	}
@@ -102,12 +95,11 @@ func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
 	if len(subcall.Args) < 1 || subcall.Args[0] == nil {
 		return
 	}
-	id, ok := subcall.Args[0].(*ast.Ident)
+	_, ok = subcall.Args[0].(*ast.Ident)
 	if !ok {
 		return
 	}
-	pos := r.fset.Position(id.Pos())
-	r.items[fixPack(r, id.Name)] = &itemInfo{&pos, false}
+	// accquire
 }
 
 // parseComment will references to an interface to be remotized if the
@@ -127,10 +119,6 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 	if !ok {
 		return
 	}
-	_, ok = tspec.Type.(*ast.InterfaceType)
-	if !ok {
-		return
-	}
 	name := fixPack(r, tspec.Name.Name)
 	i := len(decl.Doc.List) - 1
 	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
@@ -139,11 +127,17 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 		cmt := decl.Doc.List[i]
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
-			if _, ok := r.items[name]; ok {
+			if _, ok := r.sources[name]; ok {
 				return
 			}
-			pos := r.fset.Position(tspec.Pos())
-			r.items[name] = &itemInfo{&pos, true}
+			r.sources[name] = bytes.NewBufferString("type ")
+			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
+				printer.Fprint(r.sources[name], token.NewFileSet(), tspec)
+				fmt.Fprintf(r.sources[name], "\n")
+			} else {
+				fmt.Fprintf(r.sources[name], name+" interface {\n")
+			}
+			// accquire
 		}
 	}
 }
@@ -159,7 +153,7 @@ func parseRemotizeDemands(r *rinfo, file *ast.File) {
 
 // parseImports will process imports for detection on each file's source code
 func parseImports(r *rinfo, file *ast.File) {
-	r.importAliases = make(map[string]string)
+	r.aliases = make(map[string]string)
 	for _, decl := range file.Decls {
 		imp, ok := (interface{})(decl).(*ast.ImportSpec)
 		if !ok || imp.Name == nil {
@@ -170,7 +164,7 @@ func parseImports(r *rinfo, file *ast.File) {
 			parts := strings.Split(path, "/", -1)
 			path = parts[len(parts)-1]
 		}
-		r.importAliases[path] = imp.Name.Name
+		r.aliases[path] = imp.Name.Name
 	}
 }
 
@@ -179,6 +173,7 @@ func parseFile(r *rinfo, file *ast.File) {
 	r.currpack = file.Name.Name
 	parseImports(r, file)
 	parseRemotizeDemands(r, file)
+	//ast.Print(token.NewFileSet(), file)
 }
 
 /*
@@ -186,33 +181,33 @@ func parseFile(r *rinfo, file *ast.File) {
 		- Are defined with a comment including '(remotize)' at the end
 		- Are used within remotize.NewClient(), NewServer() or PleaseRemotize() Calls 
 */
-func Autoremotize(path string, files []string) (int, os.Error) {
+func Autoremotize(path string, files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
-	rs.fset = token.NewFileSet()
-	rs.items = make(map[string]*itemInfo)
+	rs.sources = make(map[string]*bytes.Buffer)
 	for _, f := range files {
 		filename := path + "/" + f
-		file, e := parser.ParseFile(rs.fset, filename, nil, parser.ParseComments)
+		file, e := parser.ParseFile(token.NewFileSet(), filename, nil,
+			parser.ParseComments)
 		if e != nil {
 			return done, e
 		}
 		parseFile(rs, file)
 		//ast.Print(rs.fset, file)
 	}
-	items := len(rs.items)
+	items := len(rs.sources)
 	if items == 0 {
-		fmt.Println("No interfaces found to remotize")
+		fmt.Println("No 'remotizables' found")
 		return done, nil
 	}
 	fmt.Printf("Found %v interfaces to remotize:\n", items)
-	for name, pos := range rs.items {
-		fmt.Println(name, "at", pos)
+	for name, src := range rs.sources {
+		fmt.Printf("%v:\n%v", name, src.String())
 	}
-	e := build(rs)
+	/*e := build(rs)
 	if e != nil {
 		fmt.Println("Error:", e)
-	}
+	}*/
 	return done, nil
 }
 
@@ -278,10 +273,12 @@ func (is *srcIfaceSpec) NumMethod() int {
 	return len(is.Methods.List)
 }
 
+/*
 func (is *srcIfaceSpec) MethodSpec(i int) methodSpec {
 	m := is.Methods.List[i]
 	return &srcMethodSpec{solveName(m.Names[0]), (m.Type).(*ast.FuncType)}
 }
+*/
 
 // source method specification
 type srcMethodSpec struct {
@@ -344,5 +341,42 @@ func (m *srcMethodSpec) OutPkg(i int) string {
 
 func (m *srcMethodSpec) OutIsError(i int) bool {
 	return m.OutName(i) == "os.Error"
+}
+
+// runs a command
+func runCmd(cmdargs ...string) ([]byte, os.Error) {
+	fmt.Println(cmdargs)
+	return exec.Command(cmdargs[0], cmdargs[1:]...).CombinedOutput()
+}
+
+// dictionary cache
+var dict map[string]string
+
+// go tool execution string
+func goexec(tool string) string {
+	if dict == nil {
+		dict = make(map[string]string)
+		dict["386"] = "8"
+		dict["amd64"] = "6"
+		dict["arm"] = "5"
+		dict["compiler"] = "g"
+		dict["linker"] = "l"
+	}
+	return dict[os.Getenv("GOARCH")] + dict[tool]
+}
+
+// Go compiler
+func gocompile() string {
+	return goexec("compiler")
+}
+
+// Go linker
+func golink() string {
+	return goexec("linker")
+}
+
+// Go architecture extension
+func goext() string {
+	return goexec("")
 }
 

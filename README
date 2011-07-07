@@ -1,11 +1,13 @@
 INTRODUCTION
 ____________
 
+Remotize provides easy remotization, as it's name implies.
+
 Remotize aims to aid developers wanting to "remotize" Go code.
 
 Using the Google's Go core rpc package directly, developers that want to call some function, method or interface remotely have to create or redesign a rpc-compatible interface following certain strict rules (http://golang.org/pkg/rpc/). With remotize it is NOT needed to write the interface or a wrapper to an existing one following rpc's rules, because the remotize package will do that for you.
 
-Remotize will build a myinterfaceRemotized.go file containing the wrapping and unwrapping of the rpc calls so that you can directly call remotely:
+Remotize will build a remotizedMyinterface.go file containing the wrapping and unwrapping of the rpc calls so that you can directly call remotely:
 
 r:=c.add(1,2.5) 
 
@@ -15,9 +17,7 @@ c.add(pointerToArgs,pointerToResults)
 
 You can call existing interfaces remotely without touching them or writing the rpc wrappers yourself.
 
-Remotize provides easy remotization, as it's name implies.
-
-Not all can be remotized, of course, channels are not remotizable, for instance.
+Not all can be remotized, of course, channels are not remotizable, for instance. But for the time being there is no filter or argument type checking to avoid nonsense remotizations.
 
 
 

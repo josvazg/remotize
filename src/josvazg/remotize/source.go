@@ -149,7 +149,12 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 	}
 	called := solveName(call.Args[argpos])
 	if called != "" {
-		r.types = addOnce(r.types, called)
+		if strings.Contains(called, ".") {
+			r.types = addOnce(r.types, called)
+		} else {
+			r.sources[called] = bytes.NewBufferString(
+				"type " + called + " interface {")
+		}
 	}
 }
 

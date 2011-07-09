@@ -17,9 +17,9 @@ import (
 type rinfo struct {
 	currpack string
 	aliases  map[string]string
-	sources  map[string]*bytes.Buffer
 	methods  map[string][]*ast.FuncDecl
-	pending  int
+	sources  map[string]*bytes.Buffer
+	types    []string
 	Imports  *bytes.Buffer
 }
 
@@ -66,60 +66,10 @@ func funcName(call *ast.CallExpr) string {
 	return ""
 }*/
 
-// parseRemotizeCalls will detect invocations of remotize calls like NewServer,
-// NewClient or the empty marker RemotizePlease
-func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
-	call, ok := (interface{})(decl).(*ast.CallExpr)
-	if !ok {
-		return
-	}
-	if call.Fun == nil {
-		return
-	}
-	fmt.Println("call", call)
-	name := solveName(call.Fun)
-	fmt.Println("name", name)
-	if name == "" {
-		return
-	}
-	argpos := -1
-	if name == "RemotizePlease" {
-		argpos = 0
-	}
-	if name == "NewServer" || name == "NewClient" {
-		argpos = 1
-	}
-	if len(call.Args) < (argpos+1) || call.Args[argpos] == nil {
-		return
-	}
-	subcall, ok := call.Args[argpos].(*ast.CallExpr)
-	if !ok {
-		return
-	}
-	cn, ok := subcall.Fun.(*ast.Ident)
-	if !ok || cn.Name != "new" {
-		return
-	}
-	if len(subcall.Args) < 1 || subcall.Args[0] == nil {
-		return
-	}
-	if _, ok = subcall.Args[0].(*ast.Ident); !ok {
-		return
-	}
-	// accquire
-}
-
 // parseComment will search for interfaces or type with a comment 
 // in the source code ended by '(remotize)' and will mark them for remotization
-func parseComment(r *rinfo, idecl ast.Decl) {
-	decl, ok := (interface{})(idecl).(*ast.GenDecl)
-	if !ok {
-		return
-	}
-	if decl.Doc == nil {
-		return
-	}
-	if decl.Specs == nil || len(decl.Specs) == 0 {
+func parseComment(r *rinfo, decl *ast.GenDecl) {
+	if decl.Doc == nil || decl.Specs == nil || len(decl.Specs) == 0 {
 		return
 	}
 	tspec, ok := decl.Specs[0].(*ast.TypeSpec)
@@ -150,7 +100,6 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 					"\ntype ")
 				fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
 					name, suffix(name))
-				r.pending++
 			}
 		}
 	}
@@ -158,9 +107,8 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 
 // parseMethods will search for Function Declaration for types detected and 
 // marked by parseComment 
-func parseMethods(r *rinfo, idecl ast.Decl) {
-	fdecl, ok := (interface{})(idecl).(*ast.FuncDecl)
-	if !ok || fdecl.Recv == nil {
+func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
+	if fdecl.Recv == nil {
 		return
 	}
 	recv := solveName(fdecl.Recv.List[0])
@@ -170,6 +118,51 @@ func parseMethods(r *rinfo, idecl ast.Decl) {
 	}
 	ml = append(ml, fdecl)
 	r.methods[recv] = ml
+}
+
+func addOnce(list []string, item string) []string {
+	for _, s := range list {
+		if s == item {
+			return list
+		}
+	}
+	return append(list, item)
+}
+
+// parseCalls will detect invocations of remotize calls like NewServer,
+// NewClient or the empty marker RemotizePlease
+func parseCalls(r *rinfo, call *ast.CallExpr) {
+	if call.Fun == nil {
+		return
+	}
+	name := solveName(call.Fun)
+	argpos := -1
+	if name == "RemotizePlease" {
+		argpos = 0
+	} else if name == "NewLocal" || name == "NewRemote" {
+		argpos = 1
+	} else {
+		return
+	}
+	if len(call.Args) < (argpos+1) || call.Args[argpos] == nil {
+		return
+	}
+	called := solveName(call.Args[argpos])
+	if called != "" {
+		r.types = addOnce(r.types, called)
+	}
+}
+
+func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
+	switch d := n.(type) {
+	case *ast.GenDecl:
+		parseComment(r, d)
+	case *ast.FuncDecl:
+		parseMethods(r, d)
+	case *ast.CallExpr:
+		parseCalls(r, d)
+	}
+	return r
 }
 
 func fillMethods(r *rinfo) {
@@ -187,15 +180,6 @@ func fillMethods(r *rinfo) {
 			r.sources[recv] = nil, false
 		}
 	}
-}
-
-func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
-	if d, ok := n.(ast.Decl); ok {
-		parseComment(r, d)
-		parseRemotizeCalls(r, d)
-		parseMethods(r, d)
-	}
-	return r
 }
 
 // parseImports will process imports for detection on each file's source code
@@ -233,7 +217,7 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 		}
 		parseImports(r, file)
 		ast.Walk(r, file)
-		//ast.Print(token.NewFileSet(), file)		
+		//ast.Print(token.NewFileSet(), file)
 	}
 	fillMethods(r)
 	return nil
@@ -249,6 +233,7 @@ func Autoremotize(files ...string) (int, os.Error) {
 	rs := &rinfo{}
 	rs.sources = make(map[string]*bytes.Buffer)
 	rs.methods = make(map[string][]*ast.FuncDecl)
+	rs.types = make([]string, 0)
 	if e := parseFiles(rs, files...); e != nil {
 		return 0, e
 	}
@@ -257,10 +242,12 @@ func Autoremotize(files ...string) (int, os.Error) {
 		fmt.Println("No 'remotizables' found")
 		return done, nil
 	}
-	fmt.Printf("Found %v interfaces to remotize:\n", items)
+	fmt.Printf("Found %v source interfaces to remotize:\n", items)
 	for name, src := range rs.sources {
 		fmt.Printf("%v:\n%v", name, src.String())
 	}
+	types := len(rs.types)
+	fmt.Printf("Found %v types to remotize: %v\n", types, rs.types)
 	/*e := build(rs)
 	if e != nil {
 		fmt.Println("Error:", e)
@@ -280,6 +267,13 @@ func solveName(e interface{}) string {
 	case *ast.SelectorExpr:
 		se := (interface{})(e).(*ast.SelectorExpr)
 		return solveName(se.X) + "." + se.Sel.Name
+	case *ast.CallExpr:
+		call := e.(*ast.CallExpr)
+		name := solveName(call.Fun)
+		if name == "new" {
+			return solveName(call.Args[0])
+		}
+		return name
 	}
 	return ""
 }

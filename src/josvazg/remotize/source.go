@@ -49,6 +49,21 @@ func fixPack(r *rinfo, name string) string {
 	}
 	return alias + "." + parts[1]
 }
+/*
+func funcName(call *ast.CallExpr) string {
+	se, ok := call.Fun.(*ast.SelectorExpr)
+	name := ""
+	if ok {
+		if id, ok := se.X.(*ast.Ident); ok && id.Name == "remotize" {
+			return se.Sel.Name
+		}
+	} else if r.currpack == "remotize" {
+		if id, ok := call.Fun.(*ast.Ident);ok {
+			return id.Name
+		}
+	}
+	return ""
+}*/
 
 // parseRemotizeCalls will detect invocations of remotize calls like NewServer,
 // NewClient or the empty marker RemotizePlease
@@ -60,20 +75,11 @@ func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
 	if call.Fun == nil {
 		return
 	}
-	se, ok := call.Fun.(*ast.SelectorExpr)
-	name := ""
-	if ok {
-		id, ok := se.X.(*ast.Ident)
-		if !ok || id.Name != "remotize" {
-			return
-		}
-		name = se.Sel.Name
-	} else if r.currpack == "remotize" {
-		id, ok := call.Fun.(*ast.Ident)
-		if !ok {
-			return
-		}
-		name = id.Name
+	fmt.Println("call", call)
+	name := solveName(call.Fun)
+	fmt.Println("name", name)
+	if name == "" {
+		return
 	}
 	argpos := -1
 	if name == "RemotizePlease" {
@@ -96,8 +102,7 @@ func parseRemotizeCalls(r *rinfo, decl ast.Decl) {
 	if len(subcall.Args) < 1 || subcall.Args[0] == nil {
 		return
 	}
-	_, ok = subcall.Args[0].(*ast.Ident)
-	if !ok {
+	if _, ok = subcall.Args[0].(*ast.Ident); !ok {
 		return
 	}
 	// accquire
@@ -139,7 +144,7 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 					"\ntype ")
 				fmt.Fprintf(r.sources[name], "%s%s interface {",
 					name, suffix(name))
-				r.sources["*"+name] = bytes.NewBufferString("// for*" + name +
+				r.sources["*"+name] = bytes.NewBufferString("// for *" + name +
 					"\ntype ")
 				fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
 					name, suffix(name))
@@ -149,8 +154,8 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 	}
 }
 
-// parseComment will search for interfaces or type with a comment 
-// in the source code ended by '(remotize)' and will mark them for remotization
+// parseMethods will search for Function Declaration for types detected and 
+// marked by parseComment 
 func parseMethods(r *rinfo, idecl ast.Decl) {
 	fdecl, ok := (interface{})(idecl).(*ast.FuncDecl)
 	if !ok || fdecl.Recv == nil {
@@ -233,7 +238,7 @@ func Autoremotize(path string, files ...string) (int, os.Error) {
 			return done, e
 		}
 		parseFile(rs, file)
-		//ast.Print(rs.fset, file)
+		//ast.Print(token.NewFileSet(), file)
 	}
 	items := len(rs.sources)
 	if items == 0 {

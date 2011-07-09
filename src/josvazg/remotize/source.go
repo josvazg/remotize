@@ -18,6 +18,7 @@ type rinfo struct {
 	currpack string
 	aliases  map[string]string
 	sources  map[string]*bytes.Buffer
+	methods  map[string][]*ast.FuncDecl
 	pending  int
 	Imports  *bytes.Buffer
 }
@@ -139,6 +140,7 @@ func parseComment(r *rinfo, idecl ast.Decl) {
 			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
 				r.sources[name] = bytes.NewBufferString("type ")
 				printer.Fprint(r.sources[name], token.NewFileSet(), tspec)
+				fmt.Fprintf(r.sources[name], "\n")
 			} else {
 				r.sources[name] = bytes.NewBufferString("// for " + name +
 					"\ntype ")
@@ -162,38 +164,38 @@ func parseMethods(r *rinfo, idecl ast.Decl) {
 		return
 	}
 	recv := solveName(fdecl.Recv.List[0])
-	if r.sources[recv] != nil {
-		method := solveName(fdecl.Name)
-		tmpbuf := bytes.NewBufferString("")
-		printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
-		signature := tmpbuf.String()[4:]
-		fmt.Fprintf(r.sources[recv], "\n\t%s%s", method, signature)
+	ml := r.methods[recv]
+	if ml == nil {
+		ml = make([]*ast.FuncDecl, 0)
 	}
+	ml = append(ml, fdecl)
+	r.methods[recv] = ml
 }
 
-// parseRemotizeDemands detects comments or calls requiring to remotize some 
-// interface
-func parseRemotizeDemands(r *rinfo, file *ast.File) {
-	for _, decl := range file.Decls {
-		parseComment(r, decl)
-		//parseRemotizeCalls(r, decl)
-	}
-}
-
-func closeSources(r *rinfo) {
-	if r.pending > 0 {
-		for recv, src := range r.sources {
-			s := src.String()
-			endsWith := s[len(s)-1:]
-			if endsWith == "{" {
-				r.sources[recv] = nil, false
-			} else if endsWith != "}" {
-				fmt.Fprintf(r.sources[recv], "\n}\n")
-			} else {
-				fmt.Fprintf(r.sources[recv], "\n")
+func fillMethods(r *rinfo) {
+	for recv, src := range r.sources {
+		if r.methods[recv] != nil {
+			for _, fdecl := range r.methods[recv] {
+				method := solveName(fdecl.Name)
+				tmpbuf := bytes.NewBufferString("")
+				printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
+				signature := tmpbuf.String()[4:]
+				fmt.Fprintf(src, "\n\t%s%s", method, signature)
 			}
+			fmt.Fprintf(src, "\n}\n")
+		} else if endsWith(src.String(), "{") {
+			r.sources[recv] = nil, false
 		}
 	}
+}
+
+func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
+	if d, ok := n.(ast.Decl); ok {
+		parseComment(r, d)
+		parseRemotizeCalls(r, d)
+		parseMethods(r, d)
+	}
+	return r
 }
 
 // parseImports will process imports for detection on each file's source code
@@ -225,19 +227,15 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 		fs = append(fs, file)
 		if r.currpack == "" {
 			r.currpack = file.Name.Name
+		} else if r.currpack != file.Name.Name {
+			panic("One package at a time! (can't remotize files from " +
+				r.currpack + " and " + file.Name.Name + " at the same time)")
 		}
-	}
-	for _, file := range fs {
 		parseImports(r, file)
-		parseRemotizeDemands(r, file)
+		ast.Walk(r, file)
 		//ast.Print(token.NewFileSet(), file)		
 	}
-	for _, file := range fs {
-		for _, decl := range file.Decls {
-			parseMethods(r, decl)
-		}
-	}
-	closeSources(r)
+	fillMethods(r)
 	return nil
 }
 
@@ -250,6 +248,7 @@ func Autoremotize(files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
 	rs.sources = make(map[string]*bytes.Buffer)
+	rs.methods = make(map[string][]*ast.FuncDecl)
 	if e := parseFiles(rs, files...); e != nil {
 		return 0, e
 	}

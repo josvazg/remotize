@@ -176,12 +176,12 @@ func parseMethods(r *rinfo, idecl ast.Decl) {
 func parseRemotizeDemands(r *rinfo, file *ast.File) {
 	for _, decl := range file.Decls {
 		parseComment(r, decl)
-		parseRemotizeCalls(r, decl)
+		//parseRemotizeCalls(r, decl)
 	}
+}
+
+func closeSources(r *rinfo) {
 	if r.pending > 0 {
-		for _, decl := range file.Decls {
-			parseMethods(r, decl)
-		}
 		for recv, src := range r.sources {
 			s := src.String()
 			endsWith := s[len(s)-1:]
@@ -214,11 +214,31 @@ func parseImports(r *rinfo, file *ast.File) {
 }
 
 // parseFile will process a go source file to detect interfaces to be remotized
-func parseFile(r *rinfo, file *ast.File) {
-	r.currpack = file.Name.Name
-	parseImports(r, file)
-	parseRemotizeDemands(r, file)
-	//ast.Print(token.NewFileSet(), file)
+func parseFiles(r *rinfo, files ...string) os.Error {
+	var fs []*ast.File
+	for _, f := range files {
+		file, e := parser.ParseFile(token.NewFileSet(), f, nil,
+			parser.ParseComments)
+		if e != nil {
+			return e
+		}
+		fs = append(fs, file)
+		if r.currpack == "" {
+			r.currpack = file.Name.Name
+		}
+	}
+	for _, file := range fs {
+		parseImports(r, file)
+		parseRemotizeDemands(r, file)
+		//ast.Print(token.NewFileSet(), file)		
+	}
+	for _, file := range fs {
+		for _, decl := range file.Decls {
+			parseMethods(r, decl)
+		}
+	}
+	closeSources(r)
+	return nil
 }
 
 /*
@@ -226,19 +246,12 @@ func parseFile(r *rinfo, file *ast.File) {
 		- Are defined with a comment including '(remotize)' at the end
 		- Are used within remotize.NewClient(), NewServer() or PleaseRemotize() Calls 
 */
-func Autoremotize(path string, files ...string) (int, os.Error) {
+func Autoremotize(files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
 	rs.sources = make(map[string]*bytes.Buffer)
-	for _, f := range files {
-		filename := path + "/" + f
-		file, e := parser.ParseFile(token.NewFileSet(), filename, nil,
-			parser.ParseComments)
-		if e != nil {
-			return done, e
-		}
-		parseFile(rs, file)
-		//ast.Print(token.NewFileSet(), file)
+	if e := parseFiles(rs, files...); e != nil {
+		return 0, e
 	}
 	items := len(rs.sources)
 	if items == 0 {

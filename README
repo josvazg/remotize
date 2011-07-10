@@ -21,3 +21,76 @@ Not all can be remotized, of course, channels are not remotizable, for instance.
 
 
 
+HOW DOES IT WORK?
+_________________
+
+Let's say you have some type called "URLStore" that have the following methods:
+
+Get(key string) string
+Set(key, url string) bool
+
+And let's say you want to use it remotely to distribute the store load between various servers.
+
+What you would do is to get a remote reference for the "URLStorer" interface instead of calling the local urlstore:
+
+urlstore:=NewRemoteURLStorer(rpcClient,new(URLStorer)) // instead of old urlstore:=NewURLStore(...)
+
+Of course you also need to setup the rpcClient (of type rpc.Client) connected to the right rpc.Server you will be using.
+
+And on the server side you'll have to prepare the serving URLStore object this way:
+
+urlstoreService:=NewURLStoreService(rpcServer,NewURLStore(...))
+
+Where rpcServer is a rpc.Server type properly setup to serve rpcs and NewURLStore() is your old URLStore init or "constructor" function.
+
+And thats it!
+
+- "Really?"
+- "Is it THAT magic?"
+Well not exactly, no, you also need to do a small change into your package make file:
+
+include $(GOROOT)/src/Make.inc
+
+TARG=...
+GOFILES=...go
+
+#include $(GOROOT)/src/Make.pkg
+include $(GOROOT)/src/Make.prepkg
+
+Changing the last included make file will make sure that BEFORE your code is ever compiled, the goremote command will be called on your go source code files and it will detect that you want to use the URLSore type remotely. Then it will create a custom go program to remotize URLStore and that program will be run and generate a go file called remotizedURLStorer.go that will be compiled with the rest of your package go sources. This go source file will provide you with:
+
+- The URLStorer interface that have the URLStore Get and Set methods defined within. The interface will be called after the type plus a "er" or "r" depending whether the name end with consonant or not.
+
+- The NewRemoteURLStorer() function to get remote references to URLStorer objects. This will NOT return a URLStore, but a type implementing the URLStorer interface.
+
+- The NewURLStorerService() function to create a URLStorer service for any type implementing the URLStorer Get/Set interface, as for instance URLStore does.
+
+- The type returned by NewRemoteURLStorer() implementing the URLStorer as rpc calls with the arguments and returnen the rpc results.
+
+- The type returned by NewURLStorerService() implementing the URLStorer interface as a rpc service that gets rpc equivalent calls to the URLStorer interface, executes them as calls to the URLStorer implementation that is given, and returns the results back via rpc again.
+
+
+AGAIN, HOW ARE TYPES MARKED AS TO BE REMOTIZED?
+_______________________________________________
+
+Well you can't only mark types, but you can choose to mark a type or its interface if you al ready defined it by hand.
+
+The goremote tool will scan you code to find calls like such as NewXXXService() or NewRemoteXXX() or remotize.NewService(XXX...) or remotize.NewRemote(XXX...). If found it will deduce it has to produce the remotizedXXX() file for the type or interface XXX.
+
+If XXX it's a type, it will produce all the code needed, included the 'XXXer' interface. If XXX is an interface it will NOT duplicate the interface declaration.
+
+- "But... what if I want to make a type or interface remotized but I am not using those calls?"
+- "Maybe I want it to be remotized to be used by other packages importing mine"
+
+Well, there are two ways of doing this.
+
+1) Put a comment on top of the interface declaration you want to remotize ending with the text "(remotize)". This comments will make the goremote tool mark the object for remotization.
+
+2) Use the remotize.PleaseRemotize(YYY) function passing it the YYY interface or type to be remotized. This function really does nothing, but the goremote will interpret it as a request to remotize YYY.
+
+Remember that you can:
+
+- Remotize either interfaces or types.
+- The types or interfaces can be defined by you within your package or defined by some other package before yours.
+
+But you shouldn't remotize types with methods that have arguments or returns that are not to be sent by rpc or do not make sens to be rpc'ed like channels or functions. Remotize will not stop you from doing that, but it doesn't make sense.

@@ -19,7 +19,7 @@ type rinfo struct {
 	aliases  map[string]string
 	methods  map[string][]*ast.FuncDecl
 	sources  map[string]*bytes.Buffer
-	types    []string
+	types    map[string]interface{}
 	Imports  *bytes.Buffer
 }
 
@@ -84,26 +84,21 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 		cmt := decl.Doc.List[i]
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
-			if _, ok := r.sources[name]; ok {
+			if _, ok := r.types[name]; ok {
 				return
 			}
-			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
-				r.sources[name] = bytes.NewBufferString("type ")
-				printer.Fprint(r.sources[name], token.NewFileSet(), tspec)
-				fmt.Fprintf(r.sources[name], "\n")
-			} else {
-				r.sources[name] = bytes.NewBufferString("// for " + name +
-					"\ntype ")
-				fmt.Fprintf(r.sources[name], "%s%s interface {",
-					name, suffix(name))
-				r.sources["*"+name] = bytes.NewBufferString("// for *" + name +
-					"\ntype ")
-				fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
-					name, suffix(name))
-			}
+			r.types[name] = tspec.Type
 		}
 	}
 }
+/*
+			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
+
+			} else {
+			}
+		}
+	}
+}*/
 
 // parseMethods will search for Function Declaration for types detected and 
 // marked by parseComment 
@@ -120,15 +115,6 @@ func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
 	r.methods[recv] = ml
 }
 
-func addOnce(list []string, item string) []string {
-	for _, s := range list {
-		if s == item {
-			return list
-		}
-	}
-	return append(list, item)
-}
-
 // parseCalls will detect invocations of remotize calls like NewServer,
 // NewClient or the empty marker RemotizePlease
 func parseCalls(r *rinfo, call *ast.CallExpr) {
@@ -139,7 +125,7 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 	argpos := -1
 	if name == "RemotizePlease" {
 		argpos = 0
-	} else if name == "NewLocal" || name == "NewRemote" {
+	} else if name == "NewRemote" || name == "NewService" {
 		argpos = 1
 	} else {
 		return
@@ -149,12 +135,7 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 	}
 	called := solveName(call.Args[argpos])
 	if called != "" {
-		if strings.Contains(called, ".") {
-			r.types = addOnce(r.types, called)
-		} else {
-			r.sources[called] = bytes.NewBufferString(
-				"type " + called + " interface {")
-		}
+		r.types[called] = called
 	}
 }
 
@@ -170,7 +151,24 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 	return r
 }
 
-func fillMethods(r *rinfo) {
+func postProcess(r *rinfo) {
+	for name, v := range r.types {
+		switch vt := v.(type) {
+		case *ast.InterfaceType:
+			r.sources[name] = bytes.NewBufferString("type ")
+			printer.Fprint(r.sources[name], token.NewFileSet(), vt)
+			fmt.Fprintf(r.sources[name], "\n")
+		default:
+			r.sources[name] = bytes.NewBufferString("// for " + name +
+				"\ntype ")
+			fmt.Fprintf(r.sources[name], "%s%s interface {",
+				name, suffix(name))
+			r.sources["*"+name] = bytes.NewBufferString("// for *" + name +
+				"\ntype ")
+			fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
+				name, suffix(name))
+		}
+	}
 	for recv, src := range r.sources {
 		if r.methods[recv] != nil {
 			for _, fdecl := range r.methods[recv] {
@@ -224,7 +222,7 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 		ast.Walk(r, file)
 		//ast.Print(token.NewFileSet(), file)
 	}
-	fillMethods(r)
+	postProcess(r)
 	return nil
 }
 
@@ -238,7 +236,7 @@ func Autoremotize(files ...string) (int, os.Error) {
 	rs := &rinfo{}
 	rs.sources = make(map[string]*bytes.Buffer)
 	rs.methods = make(map[string][]*ast.FuncDecl)
-	rs.types = make([]string, 0)
+	rs.types = make(map[string]interface{}, 0)
 	if e := parseFiles(rs, files...); e != nil {
 		return 0, e
 	}

@@ -24,7 +24,6 @@ func (s *URLStore) Set(key, url string) bool {
 }
 
 // Some interface
-// (Remotize)
 type Calcer interface {
 	Add(float64, float64) float64
 	AddTo(*float64, float64)

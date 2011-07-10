@@ -270,10 +270,10 @@ func IO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 var registry = make(map[string]interface{})
 
 // Remotes (server wrappers) must be Implementers
-type BuildRemote func(*rpc.Server, interface{}) interface{}
+type BuildService func(*rpc.Server, interface{}) interface{}
 
 // Locals (client wrappers) must be Invokers
-type BuildLocal func(*rpc.Client) interface{}
+type BuildRemote func(*rpc.Client) interface{}
 
 func startsWith(str, s string) bool {
 	return len(str) >= len(s) && str[:len(s)] == s
@@ -305,8 +305,8 @@ func searchName(prefix, ifacename string) string {
 	return ifacename + suffix(ifacename)
 }
 
-func RegisterRemotized(l interface{}, bl BuildLocal,
-r interface{}, br BuildRemote) {
+func RegisterRemotized(l interface{}, bl BuildRemote,
+r interface{}, br BuildService) {
 	cname := fmt.Sprintf("%v", reflect.TypeOf(l))
 	sname := fmt.Sprintf("%v", reflect.TypeOf(r))
 	lock.Lock()
@@ -324,26 +324,26 @@ func registryFind(name string) interface{} {
 }
 
 // New Remote Instance by Interface
-func NewRemote(s *rpc.Server, ifaceimpl interface{}) interface{} {
-	return NewRemoteWith(s, ifaceimpl, ifaceimpl)
+func NewService(s *rpc.Server, ifaceimpl interface{}) interface{} {
+	return NewServiceWith(s, ifaceimpl, ifaceimpl)
 }
 
-func NewRemoteWith(s *rpc.Server, iface interface{},
+func NewServiceWith(s *rpc.Server, iface interface{},
 impl interface{}) interface{} {
+	p := registryFind(searchName("", nameFor(iface)) + "Service")
+	if p == nil {
+		return nil
+	}
+	return p.(BuildService)(s, impl)
+}
+
+// New Local Instance by Interface
+func NewRemote(c *rpc.Client, iface interface{}) interface{} {
 	p := registryFind(searchName("Remote", nameFor(iface)))
 	if p == nil {
 		return nil
 	}
-	return p.(BuildRemote)(s, impl)
-}
-
-// New Local Instance by Interface
-func NewLocal(c *rpc.Client, iface interface{}) interface{} {
-	p := registryFind(searchName("Local", nameFor(iface)))
-	if p == nil {
-		return nil
-	}
-	return p.(BuildLocal)(c)
+	return p.(BuildRemote)(c)
 }
 
 func Remotize0(i interface{}) os.Error {
@@ -576,13 +576,13 @@ iface *ast.InterfaceType) string {
 	out := bytes.NewBufferString("")
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "    %sRegisterRemotized(Local%s{},\n",
+	fmt.Fprintf(out, "    %sRegisterRemotized(Remote%s{},\n",
 		rprefix, ifacename)
 	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
-		"{ return NewLocal%s(cli) },\n", ifacename)
-	fmt.Fprintf(out, "        Remote%s{},\n", ifacename)
+		"{ return NewRemote%s(cli) },\n", ifacename)
+	fmt.Fprintf(out, "        %sService{},\n", ifacename)
 	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
-		" interface{} { return NewRemote%s(srv,i.(%s)) },\n",
+		" interface{} { return New%sService(srv,i.(%s)) },\n",
 		ifacename, ifacename)
 	fmt.Fprintf(out, "    )\n")
 	fmt.Fprintf(out, "}\n\n")
@@ -599,13 +599,13 @@ iface *ast.InterfaceType) string {
 
 func remoteInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "// Remote rpc server wrapper for %s\n", ifacename)
-	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
+	fmt.Fprintf(out, "type %sService struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
-	fmt.Fprintf(out, "func NewRemote%s(srv *rpc.Server, impl %s) *Remote%s {\n",
+	fmt.Fprintf(out, "func New%sService(srv *rpc.Server, impl %s) *%sService {\n",
 		ifacename, ifacename, ifacename)
-	fmt.Fprintf(out, "    r:=&Remote%s{impl}\n", ifacename)
+	fmt.Fprintf(out, "    r:=&%sService{impl}\n", ifacename)
 	fmt.Fprintf(out, "    srv.Register(r)\n")
 	fmt.Fprintf(out, "    return r\n")
 	fmt.Fprintf(out, "}\n\n")
@@ -613,13 +613,13 @@ func remoteInit(out io.Writer, ifacename string) {
 
 func localInit(out io.Writer, ifacename string) {
 	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
-	fmt.Fprintf(out, "type Local%s struct {\n", ifacename)
+	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    cli *rpc.Client\n")
 	fmt.Fprintf(out, "}\n\n")
 	fmt.Fprintf(out, "// Direct Local%s constructor\n", ifacename)
-	fmt.Fprintf(out, "func NewLocal%s(cli *rpc.Client) *Local%s {\n",
+	fmt.Fprintf(out, "func NewRemote%s(cli *rpc.Client) *Remote%s {\n",
 		ifacename, ifacename)
-	fmt.Fprintf(out, "    return &Local%s{cli}\n", ifacename)
+	fmt.Fprintf(out, "    return &Remote%s{cli}\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
 }
 
@@ -762,7 +762,7 @@ func prettyPrintFuncFieldList(out io.Writer, f *ast.FieldList) int {
 // function that is being exposed to an RPC API, but calls simple "Server_" one
 func generateServerRPCWrapper(out io.Writer, fun *ast.FuncType,
 iface, name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(out, "func (r *Remote%s) %s(args *Args_%s, "+
+	fmt.Fprintf(out, "func (r *%sService) %s(args *Args_%s, "+
 		"reply *Reply_%s) os.Error {\n", iface, name, name, name)
 
 	fmt.Fprintf(out, "\t")
@@ -792,7 +792,7 @@ iface, name string, argcnt, replycnt int, inouts []int) {
 
 func generateClientRPCWrapper(out io.Writer, fun *ast.FuncType, iface,
 name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(out, "func (l *Local%s) %s(", iface, name)
+	fmt.Fprintf(out, "func (l *Remote%s) %s(", iface, name)
 	prettyPrintFuncFieldListUsingArgs(out, fun.Params)
 	fmt.Fprintf(out, ")")
 
@@ -811,7 +811,7 @@ name string, argcnt, replycnt int, inouts []int) {
 	for i := 0; i < argcnt; i++ {
 		fmt.Fprintf(out, "\targs.Arg%d = Arg%d\n", i, i)
 	}
-	fmt.Fprintf(out, "\terr := l.cli.Call(\"Remote%s.%s\", &args, &reply)\n",
+	fmt.Fprintf(out, "\terr := l.cli.Call(\"%sService.%s\", &args, &reply)\n",
 		iface, name)
 	fmt.Fprintf(out, "\tif err != nil {\n")
 	fmt.Fprintf(out, "\t\tpanic(err.String())\n\t}\n")

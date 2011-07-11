@@ -13,14 +13,25 @@ import (
 	"strings"
 )
 
+const (
+	Suggested = iota
+	Incomplete
+	Complete
+)
+
+type candidate struct {
+	status int
+	value  interface{}
+}
+
 // remotize spec
 type rinfo struct {
-	currpack string
-	aliases  map[string]string
-	methods  map[string][]*ast.FuncDecl
-	sources  map[string]*bytes.Buffer
-	types    map[string]interface{}
-	Imports  *bytes.Buffer
+	currpack   string
+	aliases    map[string]string
+	methods    map[string][]*ast.FuncDecl
+	candidates map[string]*candidate
+	sources    map[string]string
+	Imports    *bytes.Buffer
 }
 
 // suppress will remove the ocurrences of sups strings from s 
@@ -76,7 +87,7 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 	if !ok {
 		return
 	}
-	name := tspec.Name.Name
+	name := solveName(tspec.Name)
 	i := len(decl.Doc.List) - 1
 	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
 	}
@@ -84,21 +95,74 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 		cmt := decl.Doc.List[i]
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
-			if _, ok := r.types[name]; ok {
-				return
+			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
+				fmt.Println("Complete Interface from comments:", name)
+				r.candidates[name] = &candidate{Complete, it}
+			} else {
+				typesrc := bytes.NewBufferString("type " + suffix(name) + " interface {")
+				r.candidates[name] = &candidate{Incomplete, typesrc}
+				fmt.Println("(Confirmed but) Incomplete type from comments:", name)
 			}
-			r.types[name] = tspec.Type
 		}
 	}
 }
-/*
-			if _, ok := tspec.Type.(*ast.InterfaceType); ok {
 
-			} else {
+// parseTypes will collect interface definition just in case there are 
+// confirmed by some call as 'remotizable' 
+func parseTypes(r *rinfo, tspec *ast.TypeSpec) {
+	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
+		name := solveName(tspec.Name)
+		if can, ok := r.candidates[name]; ok {
+			str := "Suggested/Incomplete"
+			if can.status == Incomplete {
+				can.status = Complete
+				str = "Complete"
 			}
+			can.value = it
+			fmt.Println(str+"candidate interface:", name)
+		} else {
+			r.candidates[name] = &candidate{Suggested, it}
+			fmt.Println("Suggested candidate interface:", name)
 		}
 	}
-}*/
+}
+
+// parseCalls will detect invocations of remotize calls like NewServer,
+// NewClient or the empty marker RemotizePlease
+func parseCalls(r *rinfo, call *ast.CallExpr) {
+	if call.Fun == nil {
+		return
+	}
+	name := solveName(call.Fun)
+	fmt.Println("call name:" + name)
+	var called string
+	if name == "RemotizePlease" {
+		called = solveName(call.Args[0])
+	} else if name == "NewRemote" || name == "NewServiceWith" {
+		called = solveName(call.Args[1])
+	} else if startsWith(name, "NewRemote") {
+		called = name[len("NewRemote"):]
+	} else if startsWith(name, "New") && endsWith(name, "Service") {
+		called = name[len("New") : len(name)-len("Service")]
+	} else {
+		return
+	}
+	fmt.Println("call:", name, "called:", called)
+	if called != "" {
+		if can, ok := r.candidates[called]; ok {
+			if can.value != nil {
+				can.status = Complete
+				fmt.Println("Complete candidate from calls:", called)
+			} else {
+				can.status = Incomplete
+				fmt.Println("Incomplete candidate from calls:", called)
+			}
+		} else {
+			r.candidates[called] = &candidate{Incomplete, nil}
+			fmt.Println("Incomplete (empty) candidate from calls:", called)
+		}
+	}
+}
 
 // parseMethods will search for Function Declaration for types detected and 
 // marked by parseComment 
@@ -115,30 +179,6 @@ func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
 	r.methods[recv] = ml
 }
 
-// parseCalls will detect invocations of remotize calls like NewServer,
-// NewClient or the empty marker RemotizePlease
-func parseCalls(r *rinfo, call *ast.CallExpr) {
-	if call.Fun == nil {
-		return
-	}
-	name := solveName(call.Fun)
-	argpos := -1
-	if name == "RemotizePlease" {
-		argpos = 0
-	} else if name == "NewRemote" || name == "NewService" {
-		argpos = 1
-	} else {
-		return
-	}
-	if len(call.Args) < (argpos+1) || call.Args[argpos] == nil {
-		return
-	}
-	called := solveName(call.Args[argpos])
-	if called != "" {
-		r.types[called] = called
-	}
-}
-
 func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 	switch d := n.(type) {
 	case *ast.GenDecl:
@@ -147,15 +187,17 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 		parseMethods(r, d)
 	case *ast.CallExpr:
 		parseCalls(r, d)
+	case *ast.TypeSpec:
+		parseTypes(r, d)
 	}
 	return r
 }
 
 func postProcess(r *rinfo) {
-	for name, v := range r.types {
+	/*for name, v := range r.candidates {
 		switch vt := v.(type) {
 		case *ast.InterfaceType:
-			r.sources[name] = bytes.NewBufferString("type ")
+			r.candidates[name] = bytes.NewBufferString("type ")
 			printer.Fprint(r.sources[name], token.NewFileSet(), vt)
 			fmt.Fprintf(r.sources[name], "\n")
 		default:
@@ -168,19 +210,32 @@ func postProcess(r *rinfo) {
 			fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
 				name, suffix(name))
 		}
-	}
-	for recv, src := range r.sources {
-		if r.methods[recv] != nil {
-			for _, fdecl := range r.methods[recv] {
-				method := solveName(fdecl.Name)
-				tmpbuf := bytes.NewBufferString("")
-				printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
-				signature := tmpbuf.String()[4:]
-				fmt.Fprintf(src, "\n\t%s%s", method, signature)
+	}*/
+	for name, can := range r.candidates { // complete types with methods
+		if can.status == Incomplete && can.value != nil {
+			src := can.value.(*bytes.Buffer)
+			if r.methods[name] != nil {
+				for _, fdecl := range r.methods[name] {
+					method := solveName(fdecl.Name)
+					tmpbuf := bytes.NewBufferString("")
+					printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
+					signature := tmpbuf.String()[4:]
+					fmt.Fprintf(src, "\n\t%s%s", method, signature)
+				}
+				fmt.Fprintf(src, "\n}\n")
+				can.status = Complete
+				r.sources[name] = src.String()
 			}
-			fmt.Fprintf(src, "\n}\n")
-		} else if endsWith(src.String(), "{") {
-			r.sources[recv] = nil, false
+		}
+	}
+	for name, can := range r.candidates {
+		if can.status == Complete {
+			if it, ok := can.value.(*ast.InterfaceType); ok {
+				src := bytes.NewBufferString("type ")
+				printer.Fprint(src, token.NewFileSet(), it)
+				fmt.Fprintf(src, "\n")
+				r.sources[name] = src.String()
+			}
 		}
 	}
 }
@@ -234,9 +289,9 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 func Autoremotize(files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
-	rs.sources = make(map[string]*bytes.Buffer)
+	rs.candidates = make(map[string]*candidate)
 	rs.methods = make(map[string][]*ast.FuncDecl)
-	rs.types = make(map[string]interface{}, 0)
+	rs.sources = make(map[string]string)
 	if e := parseFiles(rs, files...); e != nil {
 		return 0, e
 	}
@@ -245,12 +300,10 @@ func Autoremotize(files ...string) (int, os.Error) {
 		fmt.Println("No 'remotizables' found")
 		return done, nil
 	}
-	fmt.Printf("Found %v source interfaces to remotize:\n", items)
+	fmt.Printf("Found %v interfaces/types to remotize:\n", items)
 	for name, src := range rs.sources {
-		fmt.Printf("%v:\n%v", name, src.String())
+		fmt.Printf("%v:\n%v", name, src)
 	}
-	types := len(rs.types)
-	fmt.Printf("Found %v types to remotize: %v\n", types, rs.types)
 	/*e := build(rs)
 	if e != nil {
 		fmt.Println("Error:", e)

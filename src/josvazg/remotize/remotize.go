@@ -305,6 +305,10 @@ func searchName(prefix, ifacename string) string {
 	return ifacename + suffix(ifacename)
 }
 
+func RemotizePlease(i interface{}) {
+	// Nothing to do, just a marker
+}
+
 func RegisterRemotized(l interface{}, bl BuildRemote,
 r interface{}, br BuildService) {
 	cname := fmt.Sprintf("%v", reflect.TypeOf(l))
@@ -579,10 +583,10 @@ iface *ast.InterfaceType) string {
 	fmt.Fprintf(out, "    %sRegisterRemotized(Remote%s{},\n",
 		rprefix, ifacename)
 	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
-		"{ return NewRemote%s(cli) },\n", ifacename)
+		"{\n\t\t\treturn NewRemote%s(cli)\n\t\t},\n", ifacename)
 	fmt.Fprintf(out, "        %sService{},\n", ifacename)
 	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
-		" interface{} { return New%sService(srv,i.(%s)) },\n",
+		" interface{} {\n\t\t\treturn New%sService(srv,i.(%s))\n\t\t},\n",
 		ifacename, ifacename)
 	fmt.Fprintf(out, "    )\n")
 	fmt.Fprintf(out, "}\n\n")
@@ -598,11 +602,11 @@ iface *ast.InterfaceType) string {
 }
 
 func remoteInit(out io.Writer, ifacename string) {
-	fmt.Fprintf(out, "// Remote rpc server wrapper for %s\n", ifacename)
+	fmt.Fprintf(out, "// Rpc service wrapper for %s\n", ifacename)
 	fmt.Fprintf(out, "type %sService struct {\n", ifacename)
 	fmt.Fprintf(out, "    srv %s\n", ifacename)
 	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
+	fmt.Fprintf(out, "// Direct %sService constructor\n", ifacename)
 	fmt.Fprintf(out, "func New%sService(srv *rpc.Server, impl %s) *%sService {\n",
 		ifacename, ifacename, ifacename)
 	fmt.Fprintf(out, "    r:=&%sService{impl}\n", ifacename)
@@ -612,11 +616,11 @@ func remoteInit(out io.Writer, ifacename string) {
 }
 
 func localInit(out io.Writer, ifacename string) {
-	fmt.Fprintf(out, "// Local rpc client for %s\n", ifacename)
+	fmt.Fprintf(out, "// Rpc client for %s\n", ifacename)
 	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
 	fmt.Fprintf(out, "    cli *rpc.Client\n")
 	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Direct Local%s constructor\n", ifacename)
+	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
 	fmt.Fprintf(out, "func NewRemote%s(cli *rpc.Client) *Remote%s {\n",
 		ifacename, ifacename)
 	fmt.Fprintf(out, "    return &Remote%s{cli}\n", ifacename)

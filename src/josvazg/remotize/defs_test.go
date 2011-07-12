@@ -8,7 +8,6 @@ import (
 	"strconv"
 )
 // Some type without interface
-// (remotiZe)
 type URLStore struct {
 
 }

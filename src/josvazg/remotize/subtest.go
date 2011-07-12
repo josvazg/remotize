@@ -39,6 +39,7 @@ func TestRemotizedCalc(t *test.T) {
 	fmt.Println("1123.1234/-2.21432=", d, " e=", e)
 	fmt.Println("pi=", c.Pi())
 
-	RemotizePlease(new(URLStore))
+	RemotizePlease(URLStore{})
+	RemotizePlease(&URLStore{})
 }
 

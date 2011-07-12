@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	Suggested = iota
-	Incomplete
-	Complete
+	ProposedInterface = iota
+	Type
+	Interface
 )
 
 type candidate struct {
@@ -77,6 +77,13 @@ func funcName(call *ast.CallExpr) string {
 	return ""
 }*/
 
+func markType(r *rinfo, name string) {
+	typesrc := bytes.NewBufferString("type " + strings.TrimLeft(name, " *") +
+		suffix(name) + " interface {")
+	r.candidates[name] = &candidate{Type, typesrc}
+	fmt.Println("Incomplete type from comments:", name)
+}
+
 // parseComment will search for interfaces or type with a comment 
 // in the source code ended by '(remotize)' and will mark them for remotization
 func parseComment(r *rinfo, decl *ast.GenDecl) {
@@ -96,12 +103,11 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
 			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
-				fmt.Println("Complete Interface from comments:", name)
-				r.candidates[name] = &candidate{Complete, it}
+				fmt.Println("Interface from comments:", name)
+				r.candidates[name] = &candidate{Interface, it}
 			} else {
-				typesrc := bytes.NewBufferString("type " + suffix(name) + " interface {")
-				r.candidates[name] = &candidate{Incomplete, typesrc}
-				fmt.Println("(Confirmed but) Incomplete type from comments:", name)
+				markType(r, name)
+				markType(r, "*"+name)
 			}
 		}
 	}
@@ -112,17 +118,17 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 func parseTypes(r *rinfo, tspec *ast.TypeSpec) {
 	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
 		name := solveName(tspec.Name)
-		if can, ok := r.candidates[name]; ok {
-			str := "Suggested/Incomplete"
-			if can.status == Incomplete {
-				can.status = Complete
-				str = "Complete"
-			}
-			can.value = it
-			fmt.Println(str+"candidate interface:", name)
-		} else {
-			r.candidates[name] = &candidate{Suggested, it}
-			fmt.Println("Suggested candidate interface:", name)
+		if _, ok := r.candidates[name]; !ok {
+			/*			str := "Suggested/Incomplete"
+						if can.status == Incomplete {
+							//can.status = Complete
+							str = "Complete"
+						}
+						can.value = it
+						fmt.Println(str+"candidate interface:", name)
+					} else {*/
+			r.candidates[name] = &candidate{ProposedInterface, it}
+			fmt.Println("Proposed interface:", name)
 		}
 	}
 }
@@ -134,7 +140,6 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 		return
 	}
 	name := solveName(call.Fun)
-	fmt.Println("call name:" + name)
 	var called string
 	if name == "RemotizePlease" {
 		called = solveName(call.Args[0])
@@ -147,19 +152,17 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 	} else {
 		return
 	}
-	fmt.Println("call:", name, "called:", called)
 	if called != "" {
 		if can, ok := r.candidates[called]; ok {
-			if can.value != nil {
-				can.status = Complete
-				fmt.Println("Complete candidate from calls:", called)
-			} else {
-				can.status = Incomplete
-				fmt.Println("Incomplete candidate from calls:", called)
+			if can.status == ProposedInterface {
+				can.status = Interface
+				fmt.Println("Interface from calls:", called,
+					"value", can.value)
 			}
 		} else {
-			r.candidates[called] = &candidate{Incomplete, nil}
-			fmt.Println("Incomplete (empty) candidate from calls:", called)
+			/*r.candidates[called] = &candidate{Candidate, nil}
+			fmt.Println("Type or Interface Candidate from calls:", called)*/
+			markType(r, called)
 		}
 	}
 }
@@ -177,6 +180,7 @@ func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
 	}
 	ml = append(ml, fdecl)
 	r.methods[recv] = ml
+	fmt.Println("Recorded method for", recv, ":", *fdecl)
 }
 
 func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
@@ -194,25 +198,8 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 }
 
 func postProcess(r *rinfo) {
-	/*for name, v := range r.candidates {
-		switch vt := v.(type) {
-		case *ast.InterfaceType:
-			r.candidates[name] = bytes.NewBufferString("type ")
-			printer.Fprint(r.sources[name], token.NewFileSet(), vt)
-			fmt.Fprintf(r.sources[name], "\n")
-		default:
-			r.sources[name] = bytes.NewBufferString("// for " + name +
-				"\ntype ")
-			fmt.Fprintf(r.sources[name], "%s%s interface {",
-				name, suffix(name))
-			r.sources["*"+name] = bytes.NewBufferString("// for *" + name +
-				"\ntype ")
-			fmt.Fprintf(r.sources["*"+name], "%s%s interface {",
-				name, suffix(name))
-		}
-	}*/
 	for name, can := range r.candidates { // complete types with methods
-		if can.status == Incomplete && can.value != nil {
+		if can.status == Type && can.value != nil {
 			src := can.value.(*bytes.Buffer)
 			if r.methods[name] != nil {
 				for _, fdecl := range r.methods[name] {
@@ -223,15 +210,14 @@ func postProcess(r *rinfo) {
 					fmt.Fprintf(src, "\n\t%s%s", method, signature)
 				}
 				fmt.Fprintf(src, "\n}\n")
-				can.status = Complete
 				r.sources[name] = src.String()
 			}
 		}
 	}
 	for name, can := range r.candidates {
-		if can.status == Complete {
+		if can.status == Interface || can.status == Type {
 			if it, ok := can.value.(*ast.InterfaceType); ok {
-				src := bytes.NewBufferString("type ")
+				src := bytes.NewBufferString("type " + name + " ")
 				printer.Fprint(src, token.NewFileSet(), it)
 				fmt.Fprintf(src, "\n")
 				r.sources[name] = src.String()
@@ -330,6 +316,20 @@ func solveName(e interface{}) string {
 			return solveName(call.Args[0])
 		}
 		return name
+	case *ast.UnaryExpr:
+		ue := (e).(*ast.UnaryExpr)
+		prefix := ""
+		if ue.Op == token.AND {
+			prefix = "*"
+		}
+		return prefix + solveName(ue.X)
+	case *ast.CompositeLit:
+		cl := (e).(*ast.CompositeLit)
+		if cl.Type != nil {
+			return solveName(cl.Type)
+		} else if cl.Elts != nil && len(cl.Elts) > 0 {
+			return solveName(cl.Elts[0])
+		}
 	}
 	return ""
 }

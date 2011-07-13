@@ -305,7 +305,7 @@ func searchName(prefix, ifacename string) string {
 	return ifacename + suffix(ifacename)
 }
 
-func RemotizePlease(i interface{}) {
+func Please(i interface{}) {
 	// Nothing to do, just a marker
 }
 

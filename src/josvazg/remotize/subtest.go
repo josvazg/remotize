@@ -2,10 +2,17 @@ package remotize
 
 import (
 	"fmt"
+	"image"
 	"io"
 	"rpc"
 	test "testing"
+	"container/vector"
 )
+
+func init() {
+	Please(new(image.Image))
+	Please(new(vector.Vector))
+}
 
 func TestRemotizedCalc(t *test.T) {
 	server := rpc.NewServer()

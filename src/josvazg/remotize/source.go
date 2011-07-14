@@ -46,6 +46,7 @@ type rinfo struct {
 	methods    map[string][]*ast.FuncDecl
 	candidates map[string]*candidate
 	sources    map[string]string
+	types      []string
 }
 
 // suppress will remove the ocurrences of sups strings from s 
@@ -76,12 +77,23 @@ func fixPack(r *rinfo, name string) string {
 	return alias + "." + parts[1]
 }
 
-// markType marks an incomplete type given its name ready to hold methods
+// markType marks an incomplete type by name. If it contains a package name
+// is already defined on a another package and the name is enough. But if
+// its from this package the methods must be discovered from source code
+func mark(r *rinfo, name string) {
+	if strings.Contains(name, ".") {
+		r.types = append(r.types, name)
+		return
+	}
+	markType(r, name)
+}
+
+// markType marks an type or interface given its name ready to hold methods
 func markType(r *rinfo, name string) {
 	typesrc := bytes.NewBufferString("type " + strings.TrimLeft(name, " *") +
 		suffix(name) + " interface {")
 	r.candidates[name] = &candidate{Type, typesrc}
-	//fmt.Println("Incomplete type from comments:", name)
+	//fmt.Println("Incomplete type:", name)
 }
 
 // parseComment will search for interfaces or types in the source code preceeded 
@@ -103,9 +115,10 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
 			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
-				//fmt.Println("Interface from comments:", name)
+				fmt.Println("Interface from comments:", name)
 				r.candidates[name] = &candidate{Interface, it}
 			} else {
+				fmt.Println("Type from comments: (*)", name)
 				markType(r, name)
 				markType(r, "*"+name)
 			}
@@ -120,7 +133,7 @@ func parseTypes(r *rinfo, tspec *ast.TypeSpec) {
 		name := solveName(tspec.Name)
 		if _, ok := r.candidates[name]; !ok {
 			r.candidates[name] = &candidate{ProposedInterface, it}
-			//fmt.Println("Proposed interface:", name)
+			fmt.Println("Proposed interface:", name)
 		}
 	}
 }
@@ -148,11 +161,11 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 		if can, ok := r.candidates[called]; ok {
 			if can.state == ProposedInterface {
 				can.state = Interface
-				//fmt.Println("Interface from calls:", called, "value", can.value)
+				fmt.Println("Interface from calls:", called, "value", can.value)
 			}
 		} else {
-			//fmt.Println("Type or Interface Candidate from calls:", called)
-			markType(r, called)
+			fmt.Println("Type or Interface Candidate from calls:", called)
+			mark(r, called)
 		}
 	}
 }
@@ -169,7 +182,24 @@ func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
 	}
 	ml = append(ml, fdecl)
 	r.methods[recv] = ml
-	//fmt.Println("Recorded method for", recv, ":", *fdecl)
+	fmt.Println("Recorded method for", recv, ":", *fdecl)
+}
+
+// parseImports will process imports for detection on each file's source code
+func parseImports(r *rinfo, ispec *ast.ImportSpec) {
+	path := strings.Trim(ispec.Path.Value, "\"")
+	name := path
+	if strings.Contains(path, "/") {
+		parts := strings.Split(path, "/", -1)
+		name = parts[len(parts)-1]
+	}
+	if ispec.Name != nil {
+		r.aliases[name] = ispec.Name.Name
+		fmt.Println("import aliases", r.aliases)
+	} else if name != path {
+		r.aliases[name] = path
+		fmt.Println("* import aliases", r.aliases)
+	}
 }
 
 // Visit parses the whole source code
@@ -183,6 +213,8 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 		parseCalls(r, d)
 	case *ast.TypeSpec:
 		parseTypes(r, d)
+	case *ast.ImportSpec:
+		parseImports(r, d)
 	}
 	return r
 }
@@ -218,41 +250,25 @@ func postProcess(r *rinfo) {
 	}
 }
 
-// parseImports will process imports for detection on each file's source code
-func parseImports(r *rinfo, file *ast.File) {
-	r.aliases = make(map[string]string)
-	for _, decl := range file.Decls {
-		imp, ok := (interface{})(decl).(*ast.ImportSpec)
-		if !ok || imp.Name == nil {
-			continue
-		}
-		path := strings.Trim(imp.Path.Value, "\"")
-		if strings.Contains(path, "/") {
-			parts := strings.Split(path, "/", -1)
-			path = parts[len(parts)-1]
-		}
-		r.aliases[path] = imp.Name.Name
-	}
-}
-
 // parseFiles will process go source files to detect interfaces or type 
 // to be remotized
 func parseFiles(r *rinfo, files ...string) os.Error {
-	var fs []*ast.File
+	fmt.Println("About to parse ", files)
 	for _, f := range files {
+		fmt.Println("Parsing ", f, "?")
 		file, e := parser.ParseFile(token.NewFileSet(), f, nil,
 			parser.ParseComments)
 		if e != nil {
+			fmt.Println(e)
 			return e
 		}
-		fs = append(fs, file)
 		if r.currpack == "" {
 			r.currpack = file.Name.Name
 		} else if r.currpack != file.Name.Name {
 			panic("One package at a time! (can't remotize files from " +
 				r.currpack + " and " + file.Name.Name + " at the same time)")
 		}
-		parseImports(r, file)
+		fmt.Println("Parsing ", f, "...")
 		ast.Walk(r, file)
 		//ast.Print(token.NewFileSet(), file)
 	}
@@ -260,26 +276,51 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 	return nil
 }
 
-// builds and returns the remotizer source code for a given rinfo
+// addImports adds imports to the remotizer source code from types
+func addImports(r *rinfo, imports []string) []string {
+loop:
+	for _, typename := range r.types {
+		parts := strings.Split(typename, ".", 2)
+		packname := parts[0]
+		for _, imp := range imports {
+			if packname == imp {
+				continue loop
+			}
+		}
+		imports = append(imports, packname)
+	}
+	return imports
+}
+
+// generateRemotizerCode returns the remotizer source code for a given rinfo
 func generateRemotizerCode(r *rinfo) string {
 	src := bytes.NewBuffer(make([]byte, 0))
 	fmt.Fprintf(src, remotizerHead)
 	fmt.Fprintf(src, "import (\n")
 	imports := []string{"remotize"}
+	imports = addImports(r, imports)
 	sort.SortStrings(imports)
 	for _, s := range imports {
-		fmt.Fprintf(src, "\"%v\"\n", s)
+		if fullpath, ok := r.aliases[s]; ok && fullpath != s {
+			fmt.Fprintf(src, "%s \"%s\"\n", s, fullpath)
+		} else {
+			fmt.Fprintf(src, "\"%s\"\n", s)
+		}
 	}
 	fmt.Fprintf(src, ")\n\n")
 	fmt.Fprintf(src, "var toremotize = []interface{}{\n")
 	for _, s := range r.sources {
 		fmt.Fprintf(src, "`\n%v`,", s)
 	}
+	for _, s := range r.types {
+		fmt.Fprintf(src, "\nnew(%v),", s)
+	}
 	fmt.Fprintf(src, "\n}\n\n")
 	fmt.Fprintf(src, remotizerTail)
 	return src.String()
 }
 
+// writeAndFormatSource writes the go source to a file properly formatted
 func writeAndFormatSource(filename, source string) os.Error {
 	fset := token.NewFileSet()
 	f, e := parser.ParseFile(fset, filename+".go", source, parser.ParseComments)
@@ -331,21 +372,20 @@ remotize.NewService(), remotize.Please(), NewRemoteXXX() or NewXXXService()
 func Autoremotize(files ...string) (int, os.Error) {
 	done := 0
 	rs := &rinfo{}
+	rs.aliases = make(map[string]string)
 	rs.candidates = make(map[string]*candidate)
 	rs.methods = make(map[string][]*ast.FuncDecl)
 	rs.sources = make(map[string]string)
+	rs.types = make([]string, 0)
 	if e := parseFiles(rs, files...); e != nil {
 		return 0, e
 	}
-	items := len(rs.sources)
+	items := len(rs.sources) + len(rs.types)
 	if items == 0 {
 		fmt.Println("No 'remotizables' found")
 		return done, nil
 	}
 	fmt.Printf("Found %v interfaces/types to remotize:\n", items)
-	/*for name, src := range rs.sources {
-		fmt.Printf("%v:\n%v", name, src)
-	}*/
 	e := buildRemotizer(rs)
 	if e != nil {
 		fmt.Println("Error:", e)

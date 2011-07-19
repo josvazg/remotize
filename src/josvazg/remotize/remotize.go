@@ -431,8 +431,10 @@ func (d *declaration) methods(t reflect.Type) {
 		fmt.Fprintf(d.src, " {")
 		for i := 0; i < t.NumMethod(); i++ {
 			m := t.Method(i)
-			fmt.Fprintf(d.src, "\n    ")
-			d.funcsource(t, &m)
+			if isExported(m.Name) {
+				fmt.Fprintf(d.src, "\n    ")
+				d.funcsource(t, &m)
+			}
 		}
 		fmt.Fprintf(d.src, "\n}\n\n")
 	}
@@ -863,5 +865,10 @@ func prettyPrintFuncFieldListUsingArgs(out io.Writer, f *ast.FieldList) int {
 		}
 	}
 	return count
+}
+
+// isExported returns true if the given FuncDecl is Exported (=Title-case)
+func isExported(name string) bool {
+	return name != "" && name[0:1] == strings.ToUpper(name[0:1])
 }
 

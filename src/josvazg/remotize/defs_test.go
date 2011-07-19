@@ -26,7 +26,6 @@ func (s *URLStore) Set(key, url string) bool {
 type Calcer interface {
 	Add(float64, float64) float64
 	AddTo(*float64, float64)
-	Connect(io.Reader) io.Writer
 	Divide(float64, float64) (float64, os.Error)
 	Multiply(float64, float64) float64
 	Pi() float64

@@ -5,4 +5,4 @@ GOFILES=remotize.go source.go # codegen.go runtime.go
 
 include $(GOROOT)/src/Make.pkg
 
-CLEANFILES+=remotized*.go _subtest subtest
+CLEANFILES+=remotized*.go _subtest subtest _remotize*

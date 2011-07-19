@@ -37,6 +37,7 @@ package main
 type candidate struct {
 	state int
 	value interface{}
+	packs []string
 }
 
 // remotize spec
@@ -92,7 +93,7 @@ func mark(r *rinfo, name string) {
 func markType(r *rinfo, name string) {
 	typesrc := bytes.NewBufferString("type " + strings.TrimLeft(name, " *") +
 		suffix(name) + " interface {")
-	r.candidates[name] = &candidate{Type, typesrc}
+	r.candidates[name] = &candidate{Type, typesrc, nil}
 	//fmt.Println("Incomplete type:", name)
 }
 
@@ -116,7 +117,7 @@ func parseComment(r *rinfo, decl *ast.GenDecl) {
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
 			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
 				fmt.Println("Interface from comments:", name)
-				r.candidates[name] = &candidate{Interface, it}
+				r.candidates[name] = &candidate{Interface, it, nil}
 			} else {
 				fmt.Println("Type from comments: (*)", name)
 				markType(r, name)
@@ -132,7 +133,7 @@ func parseTypes(r *rinfo, tspec *ast.TypeSpec) {
 	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
 		name := solveName(tspec.Name)
 		if _, ok := r.candidates[name]; !ok {
-			r.candidates[name] = &candidate{ProposedInterface, it}
+			r.candidates[name] = &candidate{ProposedInterface, it, nil}
 			fmt.Println("Proposed interface:", name)
 		}
 	}
@@ -172,7 +173,8 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 
 // parseMethods will search for method Function Declarations in the source code
 func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
-	if fdecl.Recv == nil {
+	if fdecl.Recv == nil || fdecl.Name == nil ||
+		!isExported(solveName(fdecl.Name)) {
 		return
 	}
 	recv := solveName(fdecl.Recv.List[0])
@@ -202,6 +204,29 @@ func parseImports(r *rinfo, ispec *ast.ImportSpec) {
 	}
 }
 
+// Visit parses a candidate interface source code
+func (c *candidate) Visit(n ast.Node) (w ast.Visitor) {
+	switch d := n.(type) {
+	case ast.Expr:
+		name := solveName(d)
+		if strings.Contains(name, ".") {
+			if c.packs == nil {
+				c.packs = make([]string, 0)
+			}
+			parts := strings.Split(name, ".")
+			for _, p := range c.packs {
+				if p == parts[0] {
+					return
+				}
+			}
+			c.packs = append(c.packs, parts[0])
+		}
+	case *ast.BlockStmt:
+		return nil
+	}
+	return c
+}
+
 // Visit parses the whole source code
 func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 	switch d := n.(type) {
@@ -219,6 +244,23 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 	return r
 }
 
+// header generates the package and imports header for a candidate
+func header(r *rinfo, c *candidate) string {
+	tmpbuf := bytes.NewBufferString("package " + r.currpack + "\n\n")
+	if c.packs != nil && len(c.packs) > 0 {
+		fmt.Fprintf(tmpbuf, "imports (\n")
+		for _, pack := range c.packs {
+			if a := r.aliases[pack]; a != "" {
+				fmt.Fprintf(tmpbuf, "\t%v \"%v\"\n", pack, a)
+			} else {
+				fmt.Fprintf(tmpbuf, "\t\"%v\"\n", pack)
+			}
+		}
+		fmt.Fprintf(tmpbuf, ")\n\n")
+	}
+	return tmpbuf.String()
+}
+
 // postProcess completes candidate types with their methods (retrieved by 
 // parseMethods) and pass them and the interfaces found as sources within rinfo
 func postProcess(r *rinfo) {
@@ -228,23 +270,25 @@ func postProcess(r *rinfo) {
 			if r.methods[name] != nil {
 				for _, fdecl := range r.methods[name] {
 					method := solveName(fdecl.Name)
+					ast.Walk(can, fdecl)
 					tmpbuf := bytes.NewBufferString("")
 					printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
 					signature := tmpbuf.String()[4:]
 					fmt.Fprintf(src, "\n\t%s%s", method, signature)
 				}
 				fmt.Fprintf(src, "\n}\n")
-				r.sources[name] = src.String()
+				r.sources[name] = header(r, can) + src.String()
 			}
 		}
 	}
 	for name, can := range r.candidates {
 		if can.state == Interface || can.state == Type {
 			if it, ok := can.value.(*ast.InterfaceType); ok {
+				ast.Walk(can, it)
 				src := bytes.NewBufferString("type " + name + " ")
 				printer.Fprint(src, token.NewFileSet(), it)
 				fmt.Fprintf(src, "\n")
-				r.sources[name] = src.String()
+				r.sources[name] = header(r, can) + src.String()
 			}
 		}
 	}

@@ -294,7 +294,7 @@ func endsWithVowel(str string) bool {
 }
 
 func searchName(prefix, ifacename string) string {
-	parts := strings.Split(ifacename, ".", -1)
+	parts := strings.Split(ifacename, ".")
 	if len(parts) == 2 {
 		p := ""
 		if !startsWith(parts[1], prefix) {
@@ -499,7 +499,6 @@ func (d *declaration) source(t reflect.Type) {
 		fmt.Fprintf(d.src, t.String())
 		return
 	}
-	d.methods(t)
 }
 
 func (d *declaration) pack(t reflect.Type) {
@@ -515,7 +514,7 @@ func packname(t reflect.Type) string {
 		return packname(t.Elem())
 	}
 	path := t.PkgPath()
-	parts := strings.Split(path, ".", -1)
+	parts := strings.Split(path, "/")
 	if parts == nil && len(parts) == 1 {
 		return path
 	}
@@ -549,7 +548,7 @@ func src2ast(src string) *ast.File {
 	//fmt.Println(src)
 	f, e := parser.ParseFile(token.NewFileSet(), "", src, 0)
 	if e != nil {
-		panic(e)
+		panic(e.String() + ":\n" + src)
 	}
 	return f
 }

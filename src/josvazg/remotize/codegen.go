@@ -160,7 +160,7 @@ func Remotize(iface interface{}) os.Error {
 // build generates a program to remotize the detected interfaces
 func build(r *rinfo) os.Error {
 	imports := []string{"go/token", "remotize"}
-	sort.SortStrings(imports)
+	sort.Strings(imports)
 	r.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range imports {
 		fmt.Fprintf(r.Imports, "\"%v\"\n", s)
@@ -304,7 +304,7 @@ func (w *wrapgen) addImport(imp string) {
 
 // genWrapper generates the final source code for the wrapped interface
 func (w *wrapgen) genWrapper(name string) os.Error {
-	sort.SortStrings(w.imports)
+	sort.Strings(w.imports)
 	w.Imports = bytes.NewBuffer(make([]byte, 0))
 	for _, s := range w.imports {
 		fmt.Fprintf(w.Imports, "\"%v\"\n", s)
@@ -509,4 +509,3 @@ func inouts(m methodSpec) []int {
 	}
 	return ptrs
 }
-

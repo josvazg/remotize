@@ -69,7 +69,7 @@ func fixPack(r *rinfo, name string) string {
 	if !strings.Contains(name, ".") {
 		return r.currpack + "." + name
 	}
-	parts := strings.Split(name, ".", -1)
+	parts := strings.Split(name, ".")
 	alias := r.aliases[parts[0]]
 	if alias == "" {
 		return name
@@ -190,7 +190,7 @@ func parseImports(r *rinfo, ispec *ast.ImportSpec) {
 	path := strings.Trim(ispec.Path.Value, "\"")
 	name := path
 	if strings.Contains(path, "/") {
-		parts := strings.Split(path, "/", -1)
+		parts := strings.Split(path, "/")
 		name = parts[len(parts)-1]
 	}
 	if ispec.Name != nil {
@@ -280,7 +280,7 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 func addImports(r *rinfo, imports []string) []string {
 loop:
 	for _, typename := range r.types {
-		parts := strings.Split(typename, ".", 2)
+		parts := strings.SplitN(typename, ".", 2)
 		packname := parts[0]
 		for _, imp := range imports {
 			if packname == imp {
@@ -299,7 +299,7 @@ func generateRemotizerCode(r *rinfo) string {
 	fmt.Fprintf(src, "import (\n")
 	imports := []string{"remotize"}
 	imports = addImports(r, imports)
-	sort.SortStrings(imports)
+	sort.Strings(imports)
 	for _, s := range imports {
 		if fullpath, ok := r.aliases[s]; ok && fullpath != s {
 			fmt.Fprintf(src, "%s \"%s\"\n", s, fullpath)

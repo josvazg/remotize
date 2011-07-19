@@ -248,7 +248,7 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 func header(r *rinfo, c *candidate) string {
 	tmpbuf := bytes.NewBufferString("package " + r.currpack + "\n\n")
 	if c.packs != nil && len(c.packs) > 0 {
-		fmt.Fprintf(tmpbuf, "imports (\n")
+		fmt.Fprintf(tmpbuf, "import (\n")
 		for _, pack := range c.packs {
 			if a := r.aliases[pack]; a != "" {
 				fmt.Fprintf(tmpbuf, "\t%v \"%v\"\n", pack, a)

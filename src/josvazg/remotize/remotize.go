@@ -374,6 +374,11 @@ func Remotize0(i interface{}) os.Error {
 	if t.Kind() == reflect.Ptr {
 		return Remotize0(t.Elem())
 	}
+	if t.Kind() == reflect.String {
+		body := remotize0(i.(string))
+		save("remotized"+t.Name()+".go", body)
+		return nil
+	}
 	// TODO error
 	return nil
 }

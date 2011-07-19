@@ -358,25 +358,46 @@ func Remotize0(i interface{}) os.Error {
 		t = reflect.TypeOf(i)
 	}
 	if t.Kind() == reflect.Interface {
-		header, declaration := declare(t)
-		body := remotize0(header + declaration)
-		save("remotized"+t.Name()+".go", header+body)
+		f, e := os.Create("remotized" + t.Name() + ".go")
+		if e != nil {
+			return e
+		}
+		header, decl := declare(t)
+		fmt.Fprintf(f, header)
+		if e := remotize0(f, header+decl); e != nil {
+			return e
+		}
+		f.Close()
 		return nil
 	} else if t.NumMethod() > 0 {
-		header, decl := declare(t)
-		body := remotize0(header + decl)
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = st.Elem() {
 		}
-		save("remotized"+st.Name()+".go", header+decl+body)
+		f, e := os.Create("remotized" + st.Name() + ".go")
+		if e != nil {
+			return e
+		}
+		header, decl := declare(t)
+		fmt.Fprintf(f, header+decl)
+		if e := remotize0(f, header+decl); e != nil {
+			return e
+		}
+		f.Close()
 		return nil
 	}
 	if t.Kind() == reflect.Ptr {
 		return Remotize0(t.Elem())
 	}
 	if t.Kind() == reflect.String {
-		body := remotize0(i.(string))
-		save("remotized"+t.Name()+".go", body)
+		f, e := os.Create("remotizedX.go")
+		if e != nil {
+			return e
+		}
+		fmt.Fprintf(f, i.(string))
+		if e := remotize0(f, i.(string)); e != nil {
+			return e
+		}
+		f.Close()
 		return nil
 	}
 	// TODO error
@@ -560,7 +581,7 @@ func src2ast(src string) *ast.File {
 	return f
 }
 
-func remotize0(source string) string {
+func remotize0(w io.Writer, source string) os.Error {
 	f := src2ast(source)
 	//ast.Print(token.NewFileSet(), f)
 	rprefix := "remotize."
@@ -572,18 +593,17 @@ func remotize0(source string) string {
 			for _, spec := range gendecl.Specs {
 				if ts, ok := spec.(*ast.TypeSpec); ok {
 					if it, ok := ts.Type.(*ast.InterfaceType); ok {
-						return remotizeInterface(rprefix, ts.Name.Name, it)
+						return remotizeInterface(w, rprefix, ts.Name.Name, it)
 					}
 				}
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
-func remotizeInterface(rprefix, ifacename string,
-iface *ast.InterfaceType) string {
-	out := bytes.NewBufferString("")
+func remotizeInterface(out io.Writer, rprefix, ifacename string,
+iface *ast.InterfaceType) os.Error {
 	fmt.Fprintf(out, "// Autoregistry\n")
 	fmt.Fprintf(out, "func init() {\n")
 	fmt.Fprintf(out, "    %sRegisterRemotized(Remote%s{},\n",
@@ -604,7 +624,7 @@ iface *ast.InterfaceType) string {
 		}
 	}
 	//fmt.Println(out.String())
-	return out.String()
+	return nil
 }
 
 func remoteInit(out io.Writer, ifacename string) {

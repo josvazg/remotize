@@ -350,6 +350,11 @@ func NewRemote(c *rpc.Client, iface interface{}) interface{} {
 	return p.(BuildRemote)(c)
 }
 
+func splitSource(spec string) (string, string) {
+	parts := strings.SplitN(spec, specSeparator, 2)
+	return parts[0], parts[1]
+}
+
 func Remotize0(i interface{}) os.Error {
 	var t reflect.Type
 	if _, ok := i.(reflect.Type); ok {
@@ -389,12 +394,13 @@ func Remotize0(i interface{}) os.Error {
 		return Remotize0(t.Elem())
 	}
 	if t.Kind() == reflect.String {
-		f, e := os.Create("remotizedX.go")
+		name, source := splitSource(i.(string))
+		f, e := os.Create("remotized" + name + ".go")
 		if e != nil {
 			return e
 		}
-		fmt.Fprintf(f, i.(string))
-		if e := remotize0(f, i.(string)); e != nil {
+		fmt.Fprintln(f, source)
+		if e := remotize0(f, source); e != nil {
 			return e
 		}
 		f.Close()

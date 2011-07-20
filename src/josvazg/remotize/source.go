@@ -33,6 +33,7 @@ package main
 	}
 }`
 	redefinedMarker = "\n// Redefined\n"
+	specSeparator   = ":\n"
 )
 
 // Candidate holds a type or interface candidate to be remotized (or not)
@@ -80,6 +81,11 @@ func fixPack(r *rinfo, name string) string {
 	return alias + "." + parts[1]
 }
 
+// ifaceName returns the correspondent interface name for a given type
+func ifacename(name string) string {
+	return strings.TrimLeft(name, " *") + suffix(name)
+}
+
 // markType marks an incomplete type by name. If it contains a package name
 // is already defined on a another package and the name is enough. But if
 // its from this package the methods must be discovered from source code
@@ -93,8 +99,7 @@ func mark(r *rinfo, name string) {
 
 // markType marks an type or interface given its name ready to hold methods
 func markType(r *rinfo, name string) {
-	typesrc := bytes.NewBufferString("type " + strings.TrimLeft(name, " *") +
-		suffix(name) + " interface {")
+	typesrc := bytes.NewBufferString("type " + ifacename(name) + " interface {")
 	r.candidates[name] = &candidate{Type, typesrc, nil}
 	//fmt.Println("Incomplete type:", name)
 }
@@ -247,8 +252,10 @@ func (r *rinfo) Visit(n ast.Node) (w ast.Visitor) {
 }
 
 // header generates the package and imports header for a candidate
-func header(r *rinfo, c *candidate) string {
-	tmpbuf := bytes.NewBufferString("package " + r.currpack + "\n\n")
+func header(r *rinfo, name string) string {
+	c := r.candidates[name]
+	tmpbuf := bytes.NewBufferString(ifacename(name) + specSeparator +
+		"package " + r.currpack + "\n\n")
 	if c.packs != nil && len(c.packs) > 0 {
 		fmt.Fprintf(tmpbuf, "import (\n")
 		for _, pack := range c.packs {
@@ -279,7 +286,7 @@ func postProcess(r *rinfo) {
 					fmt.Fprintf(src, "\n\t%s%s", method, signature)
 				}
 				fmt.Fprintf(src, "\n}\n")
-				r.sources[name] = header(r, can) + src.String()
+				r.sources[name] = header(r, name) + src.String()
 			}
 		}
 	}
@@ -290,7 +297,7 @@ func postProcess(r *rinfo) {
 				src := bytes.NewBufferString("type " + name + " ")
 				printer.Fprint(src, token.NewFileSet(), it)
 				fmt.Fprintf(src, "\n")
-				r.sources[name] = header(r, can) + redefinedMarker + src.String()
+				r.sources[name] = header(r, name) + redefinedMarker + src.String()
 			}
 		}
 	}
@@ -356,7 +363,7 @@ func generateRemotizerCode(r *rinfo) string {
 	fmt.Fprintf(src, ")\n\n")
 	fmt.Fprintf(src, "var toremotize = []interface{}{\n")
 	for _, s := range r.sources {
-		fmt.Fprintf(src, "`\n%v`,", s)
+		fmt.Fprintf(src, "`%v`,", s)
 	}
 	for _, s := range r.types {
 		fmt.Fprintf(src, "\nnew(%v),", s)

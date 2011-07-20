@@ -36,7 +36,8 @@ func TestRemotize(t *test.T) {
 		return
 	}
 	if o, e := runCmd(gocompile(), "-o", "_subtest/remotize."+goext(),
-		"remotize.go", "remotizedCalcer.go", "remotizedURLStore.go",
+		"remotize.go", "source.go",
+		"remotizedCalcer.go", "remotizedURLStore.go",
 		"defs_test.go", "subtest.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return

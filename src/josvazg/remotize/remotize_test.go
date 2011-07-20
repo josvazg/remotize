@@ -73,6 +73,7 @@ func TestRemotize(t *test.T) {
 		return
 	}
 	Autoremotize("defs_test.go", "subtest.go")
+
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")
 	e := Remotize(&SimpleCalc{})
 	if e != nil {

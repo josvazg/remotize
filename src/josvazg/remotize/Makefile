@@ -1,8 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
 TARG=remotize
-GOFILES=remotize.go source.go
+GOFILES=remotize.go
 
 include $(GOROOT)/src/Make.pkg
-
-CLEANFILES+=remotized*.go _subtest subtest _remotize*

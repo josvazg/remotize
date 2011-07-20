@@ -1,12 +1,11 @@
 package main
 
-import "remotize"
 import "testing"
 import __os__ "os"
 import __regexp__ "regexp"
 
 var tests = []testing.InternalTest{
-	{"remotize.TestRemotizedCalc", remotize.TestRemotizedCalc},
+	{"TestRemotizedCalc", TestRemotizedCalc},
 }
 
 var benchmarks = []testing.InternalBenchmark{}
@@ -28,3 +27,4 @@ func matchString(pat, str string) (result bool, err __os__.Error) {
 func main() {
 	testing.Main(matchString, tests, benchmarks)
 }
+

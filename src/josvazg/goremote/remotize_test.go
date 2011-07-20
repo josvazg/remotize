@@ -1,4 +1,4 @@
-package remotize
+package main
 
 import (
 	"fmt"
@@ -29,14 +29,14 @@ func copy(orig, dest string) os.Error {
 }
 
 func TestRemotize(t *test.T) {
-	Remotize0(new(Calcer))
-	Remotize0(&URLStore{})
+	Remotize(new(Calcer))
+	Remotize(&URLStore{})
 	if e := os.MkdirAll("_subtest", 0775); e != nil {
 		t.Fatal(e.String())
 		return
 	}
-	if o, e := runCmd(gocompile(), "-o", "_subtest/remotize."+goext(),
-		"remotize.go", "source.go",
+	if o, e := runCmd(gocompile(), "-o", "subtestmain."+goext(),
+		"goremote.go", "source.go",
 		"remotizedCalcer.go", "remotizedURLStore.go",
 		"defs_test.go", "subtest.go"); e != nil {
 		t.Fatal(string(o) + e.String())
@@ -44,13 +44,13 @@ func TestRemotize(t *test.T) {
 	} else {
 		fmt.Println(string(o))
 	}
-	if o, e := runCmd(gocompile(), "-o", "subtestmain."+goext(), "-I",
+	/*if o, e := runCmd(gocompile(), "-o", "subtestmain."+goext(), "-I",
 		"_subtest", "subtestmain.go"); e != nil {
 		t.Fatal(string(o) + e.String())
 		return
 	} else {
 		fmt.Println(string(o))
-	}
+	}*/
 	if o, e := runCmd(golink(), "-o", "subtest", "-L", "_subtest",
 		"subtestmain."+goext()); e != nil {
 		t.Fatal(string(o) + e.String())

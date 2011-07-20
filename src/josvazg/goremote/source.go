@@ -1,4 +1,9 @@
-package remotize
+// Copyright 2011 Jose Luis Vázquez González josvazg@gmail.com
+// Use of this source code is governed by a BSD-style
+
+// remotize package wraps rpc calls so you don't have to rewrite an interface by
+// hand in order to use it remotely. 
+package main
 
 import (
 	"bytes"
@@ -9,6 +14,7 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"remotize"
 	"sort"
 	"strings"
 )
@@ -83,7 +89,7 @@ func fixPack(r *rinfo, name string) string {
 
 // ifaceName returns the correspondent interface name for a given type
 func ifacename(name string) string {
-	return strings.TrimLeft(name, " *") + suffix(name)
+	return strings.TrimLeft(name, " *") + remotize.Suffix(name)
 }
 
 // markType marks an incomplete type by name. If it contains a package name

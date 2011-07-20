@@ -1,4 +1,4 @@
-package remotize
+package main
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 )
+
 // Some type without interface
 type URLStore struct {
 

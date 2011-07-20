@@ -33,7 +33,7 @@ package main
 `
 	remotizerTail   = `func main() {
 	for _,r := range toremotize {
-		if e:=remotize.Remotize0(r); e!=nil {
+		if e:=Remotize(r); e!=nil {
 			panic(e)
 		}
 	}
@@ -162,10 +162,10 @@ func parseCalls(r *rinfo, call *ast.CallExpr) {
 	var called string
 	if name == "Please" {
 		called = solveName(call.Args[0])
-	} else if name == "NewRemote" || name == "NewServiceWith" {
+	} else if name == "remotize.NewRemote" || name == "remotize.NewServiceWith" {
 		called = solveName(call.Args[1])
-	} else if startsWith(name, "NewRemote") {
-		called = name[len("NewRemote"):]
+	} else if startsWith(name, "remotize.NewRemote") {
+		called = name[len("remotize.NewRemote"):]
 	} else if startsWith(name, "New") && endsWith(name, "Service") {
 		called = name[len("New") : len(name)-len("Service")]
 	} else {
@@ -356,7 +356,7 @@ func generateRemotizerCode(r *rinfo) string {
 	src := bytes.NewBuffer(make([]byte, 0))
 	fmt.Fprintf(src, remotizerHead)
 	fmt.Fprintf(src, "import (\n")
-	imports := []string{"remotize"}
+	imports := []string{}
 	imports = addImports(r, imports)
 	sort.Strings(imports)
 	for _, s := range imports {

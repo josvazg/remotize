@@ -1,4 +1,4 @@
-package remotize
+package main
 
 import (
 	"fmt"

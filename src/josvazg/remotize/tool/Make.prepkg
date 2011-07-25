@@ -1,7 +1,7 @@
 # Make.prepkg allows to run precompile actions before standard go build process
 
 ifndef PREBUILD
-	PREBUILD=*Remotized.go
+	PREBUILD=remotized*.go
 endif
 
 all: $(PREBUILD)
@@ -9,11 +9,10 @@ all: $(PREBUILD)
 install: $(PREBUILD)
 
 $(PREBUILD): $(GOFILES)
-	@echo prebuild $^
-	@echo 'package remotize' > dummyRemotized.go
+	goremote $(GOFILES)
 
 GOFILES+=$(PREBUILD)
 
 include $(GOROOT)/src/Make.pkg
 
-#CLEANFILES+=$(PREBUILD)
+CLEANFILES+=$(PREBUILD)

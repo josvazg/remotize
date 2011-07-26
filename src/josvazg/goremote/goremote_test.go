@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"remotize/tool"
+	"josvazg/remotize/tool"
 	test "testing"
 )
 

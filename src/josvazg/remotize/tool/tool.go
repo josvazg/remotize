@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"remotize"
+	"josvazg/remotize"
 	"sort"
 	"strconv"
 	"strings"

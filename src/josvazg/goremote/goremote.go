@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"remotize/tool"
+	"josvazg/remotize/tool"
 )
 
 // Main invoked Autoremotize()

@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"go/build"
 	"io"
-	"os"
 	"josvazg/remotize/tool"
+	"os"
 	test "testing"
 )
 
@@ -29,43 +30,68 @@ func copy(orig, dest string) os.Error {
 	return nil
 }
 
+func dieOnError(t *test.T, e os.Error) {
+	if e != nil {
+		t.Fatal(e.String())
+	}
+}
+
 func TestRemotize(t *test.T) {
 	tool.Remotize(new(Calcer))
 	tool.Remotize(&URLStore{})
-	if e := os.MkdirAll("_subtest", 0775); e != nil {
-		t.Fatal(e.String())
-		return
-	}
-	if o, e := tool.RunCmd(tool.Gocompile(), "subtestmain.go",
-		"remotizedCalcer.go", "remotizedURLStore.go",
-		"defs_test.go", "subtest.go"); e != nil {
-		t.Fatal(string(o) + e.String())
-		return
-	} else {
-		fmt.Println(string(o))
-	}
-	if o, e := tool.RunCmd(tool.Golink(), "-o", "subtest", "-L", "_subtest",
-		"subtestmain."+tool.Goext()); e != nil {
-		t.Fatal(string(o) + e.String())
-		return
-	} else {
-		fmt.Println(string(o))
-	}
-	if o, e := tool.RunCmd("./subtest"); e != nil {
-		t.Fatal(string(o) + e.String())
-		return
-	} else {
-		fmt.Println(string(o))
-	}
-	if e := os.RemoveAll("remotizedCalcer.go"); e != nil {
-		t.Fatal(e.String())
-		return
-	}
-	if e := os.RemoveAll("remotizedURLStore.go"); e != nil {
-		t.Fatal(e.String())
-		return
-	}
-	tool.Autoremotize("defs_test.go", "subtest.go")
+	tree, pkg, e := build.FindTree("go/build")
+	dieOnError(t, e)
+	fmt.Println("tree:", tree.Path, tree.Goroot)
+	dir, e := build.ScanDir("subtest", true)
+	dieOnError(t, e)
+	dir.GoFiles = append(dir.GoFiles, "../defs_test.go",
+		"../remotizedCalcer.go", "../remotizedURLStore.go")
+	fmt.Println("sources:", dir.GoFiles)
+	fmt.Println("imports:", dir.Imports)
+	fmt.Println("package:", dir.PkgName)
+	fmt.Println("generatin build script")
+	s, e := build.Build(tree, pkg, dir)
+	dieOnError(t, e)
+	fmt.Println("build script:", s)
+	e = s.Run()
+	dieOnError(t, e)
+	fmt.Println("built")
+
+	/*	if e := os.MkdirAll("_subtest", 0775); e != nil {
+			t.Fatal(e.String())
+			return
+		}
+		if o, e := tool.RunCmd(tool.Gocompile(), "-o",
+			"subtest/subtestmain."+tool.Goext(), "subtest/subtestmain.go",
+			"remotizedCalcer.go", "remotizedURLStore.go",
+			"defs_test.go", "subtest/subtest.go"); e != nil {
+			t.Fatal(string(o) + e.String())
+			return
+		} else {
+			fmt.Println(string(o))
+		}
+		if o, e := tool.RunCmd(tool.Golink(), "-o", "subtest/", "-L", "_subtest",
+			"subtestmain."+tool.Goext()); e != nil {
+			t.Fatal(string(o) + e.String())
+			return
+		} else {
+			fmt.Println(string(o))
+		}
+		if o, e := tool.RunCmd("./subtest"); e != nil {
+			t.Fatal(string(o) + e.String())
+			return
+		} else {
+			fmt.Println(string(o))
+		}
+		if e := os.RemoveAll("remotizedCalcer.go"); e != nil {
+			t.Fatal(e.String())
+			return
+		}
+		if e := os.RemoveAll("remotizedURLStore.go"); e != nil {
+			t.Fatal(e.String())
+			return
+		}
+	tool.Autoremotize("defs_test.go", "subtest.go")*/
 
 	/*fmt.Println("Generating code from NON interface type *simplecalc...")
 	e := Remotize(&SimpleCalc{})

@@ -39,7 +39,7 @@ func dieOnError(t *test.T, e os.Error) {
 func TestRemotize(t *test.T) {
 	tool.Remotize(new(Calcer))
 	tool.Remotize(&URLStore{})
-	tree, pkg, e := build.FindTree("go/build")
+	tree, pkg, e := build.FindTree("subtest/subtest.go")
 	dieOnError(t, e)
 	fmt.Println("tree:", tree.Path, tree.Goroot)
 	dir, e := build.ScanDir("subtest", true)

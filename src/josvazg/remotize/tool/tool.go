@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"josvazg/remotize"
+	"josvazg/remotize/misc"
 	"sort"
 	"strconv"
 	"strings"
@@ -141,7 +141,7 @@ func declare(t reflect.Type) (header string, decl string) {
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = t.Elem() {
 		}
-		dcl = newDeclaration(t, "type "+st.Name()+remotize.Suffix(st.Name())+
+		dcl = newDeclaration(t, "type "+st.Name()+misc.Suffix(st.Name())+
 			" interface")
 	}
 	dcl.methods(t)
@@ -597,7 +597,6 @@ func isExported(name string) bool {
 	return name != "" && name[0:1] == strings.ToUpper(name[0:1])
 }
 
-
 // Candidate holds a type or interface candidate to be remotized (or not)
 type candidate struct {
 	state int
@@ -645,7 +644,7 @@ func fixPack(r *rinfo, name string) string {
 
 // ifaceName returns the correspondent interface name for a given type
 func ifacename(name string) string {
-	return strings.TrimLeft(name, " *") + remotize.Suffix(name)
+	return strings.TrimLeft(name, " *") + misc.Suffix(name)
 }
 
 // markType marks an incomplete type by name. If it contains a package name

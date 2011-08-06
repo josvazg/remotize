@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"rpc"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -45,9 +46,17 @@ func Register(r interface{}, br BuildRemote, s interface{}, bs BuildService) {
 	defer lock.Unlock()
 	registry[cname] = br
 	registry[sname] = bs
+    
 }
 
-// registryFind will find a registered name in the remotize registry
+// DumpRegistry dumps the contents of the registry for debugging purposes 
+func DumpRegistry() string {
+    var s string
+    fmt.Sprintf(s,"%v",registry)
+    return s
+}
+
+// RegistryFind will find a registered name in the remotize registry
 func RegistryFind(name string) interface{} {
 	lock.Lock()
 	defer lock.Unlock()
@@ -58,7 +67,7 @@ func RegistryFind(name string) interface{} {
 // the given 'name'
 func Suffix(name string) string {
 	s := ""
-	if !EndsWith(name, "er") {
+	if !strings.HasSuffix(name, "er") {
 		if EndsWithVowel(name) {
 			s = "r"
 		} else {
@@ -66,16 +75,6 @@ func Suffix(name string) string {
 		}
 	}
 	return s
-}
-
-// StartsWith returns true if str starts with substring s
-func StartsWith(str, s string) bool {
-	return len(str) >= len(s) && str[:len(s)] == s
-}
-
-// EndsWith returns true if str ends with substring s
-func EndsWith(str, s string) bool {
-	return len(str) >= len(s) && str[len(str)-len(s):] == s
 }
 
 // EndsWithVowel returns true if str ends with an ASCII vowel (a,e,i,o,u)

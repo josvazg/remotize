@@ -72,7 +72,7 @@ func searchName(prefix, ifacename string) string {
 	parts := strings.Split(ifacename, ".")
 	if len(parts) == 2 {
 		p := ""
-		if !misc.StartsWith(parts[1], prefix) {
+		if !strings.HasPrefix(parts[1], prefix) {
 			p = prefix
 		}
 		return parts[0] + "." + p + parts[1] + misc.Suffix(ifacename)

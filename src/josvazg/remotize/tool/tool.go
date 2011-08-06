@@ -204,7 +204,8 @@ func (d *declaration) funcsource(t reflect.Type, m *reflect.Method) {
 func (d *declaration) source(t reflect.Type) {
 	switch t.Kind() {
 	case reflect.Array:
-		fmt.Fprintf(d.src, "["+strconv.Itoa(t.Len())+"]"+t.Name())
+		fmt.Fprintf(d.src, "["+strconv.Itoa(t.Len())+"]")
+        d.source(t.Elem())
 	case reflect.Chan:
 		fmt.Fprintf(d.src, "chan ")
 		d.source(t.Elem())

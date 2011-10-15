@@ -21,14 +21,3 @@ $(DIR)/remotize/tool/_test: $(DIR)/remotize/_test
 $(DIR)/remotize/_test: 
 	cd $(DIR)/remotize/ && gotest
 
-#$(DIR)/remotize/misc/_obj $(DIR)/remotize/pipe/_obj
-
-#$(DIR)/remotize/pipe/_obj:
-#	cd $(DIR)/remotize/pipe/ && gomake install
-
-#$(DIR)/remotize/misc/_obj:
-#	cd $(DIR)/remotize/misc/ && gomake install
-
-#$(DIR)/goremote/_obj: $(DIR)/remotize/tool/_obj
-#	cd $(DIR)/goremote/ && gomake
-

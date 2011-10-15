@@ -47,5 +47,8 @@ type ToolTester interface {
 }
 
 func TestTool(t *testing.T) {
-    Remotize(new(ToolTester))   
+    if e:=Remotize(new(ToolTester)); e!=nil {
+        t.Fatal(e)
+    }
+    
 }

@@ -43,4 +43,3 @@ func (p *Pipe) Close() os.Error {
 func PipeIO(in io.ReadCloser, out io.WriteCloser) *Pipe {
 	return &Pipe{in, out}
 }
-

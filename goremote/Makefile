@@ -5,7 +5,6 @@ GOFILES=goremote.go
 
 include $(GOROOT)/src/Make.cmd
 
-CLEANFILES+=remotized*.go _subtest 
-#subtest/_*
+CLEANFILES+=goremote remotized*.go _subtest subtest/_*
 
 

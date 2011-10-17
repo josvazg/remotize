@@ -1,6 +1,6 @@
 include $(GOROOT)/src/Make.inc
 
-TARG=josvazg/remotize/misc
+TARG=github.com/josvazg/remotize/misc
 GOFILES=misc.go
 
 include $(GOROOT)/src/Make.pkg

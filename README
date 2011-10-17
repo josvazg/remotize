@@ -94,3 +94,11 @@ Remember that you can:
 - The types or interfaces can be defined by you within your package or defined by some other package before yours.
 
 But you shouldn't remotize types with methods that have arguments or returns that are not to be sent by rpc or do not make sens to be rpc'ed like channels or functions. Remotize will not stop you from doing that, but it doesn't make sense.
+
+
+TESTING & COMPILING
+___________________
+
+"gomake" will run the tests, compile and install everything
+"gomake clean" will clean everything
+

@@ -1,23 +1,26 @@
-# I hope this can go away when go manages to compile without makefiles
-DIR=src/josvazg
+include $(GOROOT)/src/Make.inc
 
-GOPATH=$(HOME)/remotize
+TARG=github.com/josvazg/remotize
+GOFILES=remotize.go
 
-all: $(DIR)/remotize/tool/_test
-	rm -f $(DIR)/remotize/tool/remotize*.go
-	goinstall josvazg/remotize/pipe
-	goinstall josvazg/goremote
+include $(GOROOT)/src/Make.pkg
 
-clean:
-	cd $(DIR)/goremote && gomake clean
-	cd $(DIR)/remotize && gomake clean
-	cd $(DIR)/remotize/pipe && gomake clean
-	cd $(DIR)/remotize/misc && gomake clean
-	cd $(DIR)/remotize/tool && gomake clean
+clean: cleandeps
 
-$(DIR)/remotize/tool/_test: $(DIR)/remotize/_test
-	cd $(DIR)/remotize/tool/ && gotest
+cleandeps:
+	gomake -C pipe clean
+	gomake -C misc clean
+	gomake -C tool clean
+	gomake -C goremote clean
 
-$(DIR)/remotize/_test: 
-	cd $(DIR)/remotize/ && gotest
+all: buildeps
+
+buildeps:
+	gomake -C pipe install
+	gomake -C misc install
+	gomake test install
+	gomake -C tool test install
+	rm tool/remotized*.go
+#	cd goremote && gotest
+	gomake -C goremote install
 

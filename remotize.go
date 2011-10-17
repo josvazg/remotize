@@ -12,7 +12,7 @@ package remotize
 
 import (
 	"fmt"
-	"josvazg/remotize/misc"
+	"github.com/josvazg/remotize/misc"
 	"rpc"
 	"reflect"
 	"strings"

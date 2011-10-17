@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"go/build"
 	"io"
-	"josvazg/remotize/tool"
+	"github.com/josvazg/remotize/tool"
 	"os"
 	test "testing"
 )
@@ -39,7 +39,7 @@ func dieOnError(t *test.T, e os.Error) {
 func TestRemotize(t *test.T) {
 	tool.Remotize(new(Calcer))
 	tool.Remotize(&URLStore{})
-	tree, pkg, e := build.FindTree("subtest/subtest.go")
+	tree, pkg, e := build.FindTree("github.com/remotize/goremote/subtest/subtest.go")
 	dieOnError(t, e)
 	fmt.Println("tree:", tree.Path, tree.Goroot)
 	dir, e := build.ScanDir("subtest", true)

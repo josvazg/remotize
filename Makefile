@@ -15,12 +15,19 @@ cleandeps:
 
 all: buildeps
 
-buildeps:
-	gomake -C pipe install
-	gomake -C misc install
-	gomake test install
-	gomake -C tool test install
-	rm tool/remotized*.go
+buildeps:  tool/_obj _obj pipe/_obj
 #	cd goremote && gotest
 	gomake -C goremote install
 
+tool/_obj: misc/_obj tool/tool.go
+	gomake -C tool test install
+	rm tool/remotized*.go
+
+remotize: misc/_obj remotize.go
+	gomake test install
+
+pipe/_obj: pipe/pipe.go
+	gomake -C pipe install
+
+misc/_obj: misc/misc.go
+	gomake -C misc install

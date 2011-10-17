@@ -707,7 +707,7 @@ func parseTypes(r *rinfo, tspec *ast.TypeSpec) {
 		name := solveName(tspec.Name)
 		if _, ok := r.candidates[name]; !ok {
 			r.candidates[name] = &candidate{ProposedInterface, it, nil}
-			fmt.Println("Proposed interface:", name)
+			//fmt.Println("Purposed interface:", name)
 		}
 	}
 }
@@ -757,7 +757,7 @@ func parseMethods(r *rinfo, fdecl *ast.FuncDecl) {
 	}
 	ml = append(ml, fdecl)
 	r.methods[recv] = ml
-	fmt.Println("Recorded method for", recv, ":", *fdecl)
+	// fmt.Println("Recorded method for", recv, ":", *fdecl)
 }
 
 // parseImports will process imports for detection on each file's source code
@@ -770,10 +770,10 @@ func parseImports(r *rinfo, ispec *ast.ImportSpec) {
 	}
 	if ispec.Name != nil {
 		r.aliases[name] = ispec.Name.Name
-		fmt.Println("import aliases", r.aliases)
+		//fmt.Println("import aliases", r.aliases)
 	} else if name != path {
 		r.aliases[name] = path
-		fmt.Println("* import aliases", r.aliases)
+		//fmt.Println("* import aliases", r.aliases)
 	}
 }
 
@@ -872,9 +872,9 @@ func postProcess(r *rinfo) {
 // parseFiles will process go source files to detect interfaces or type 
 // to be remotized
 func parseFiles(r *rinfo, files ...string) os.Error {
-	fmt.Println("About to parse ", files)
+	//fmt.Println("About to parse ", files)
 	for _, f := range files {
-		fmt.Println("Parsing ", f, "?")
+		//fmt.Println("Parsing ", f, "?") 
 		file, e := parser.ParseFile(token.NewFileSet(), f, nil,
 			parser.ParseComments)
 		if e != nil {
@@ -887,7 +887,7 @@ func parseFiles(r *rinfo, files ...string) os.Error {
 			panic("One package at a time! (can't remotize files from " +
 				r.currpack + " and " + file.Name.Name + " at the same time)")
 		}
-		fmt.Println("Parsing ", f, "...")
+		//fmt.Println("Parsing ", f, "...")
 		ast.Walk(r, file)
 		//ast.Print(token.NewFileSet(), file)
 	}

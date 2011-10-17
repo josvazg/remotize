@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"josvazg/remotize/misc"
+	"github.com/josvazg/remotize/misc"
 	"sort"
 	"strconv"
 	"strings"
@@ -1085,3 +1085,4 @@ func Golink() string {
 func Goext() string {
 	return Goexec("")
 }
+

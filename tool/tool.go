@@ -76,7 +76,7 @@ func Remotize(i interface{}) os.Error {
 		}
 		header, decl := declare(t)
 		fmt.Fprintf(f, header)
-		if e := remotize0(f, header+decl); e != nil {
+		if e := remotize(t, f, header+decl); e != nil {
 			return e
 		}
 		f.Close()
@@ -91,7 +91,7 @@ func Remotize(i interface{}) os.Error {
 		}
 		header, decl := declare(t)
 		fmt.Fprintf(f, header+decl)
-		if e := remotize0(f, header+decl); e != nil {
+		if e := remotize(t, f, header+decl); e != nil {
 			return e
 		}
 		f.Close()
@@ -107,7 +107,7 @@ func Remotize(i interface{}) os.Error {
 			return e
 		}
 		fmt.Fprintln(f, source)
-		if e := remotize0(f, source); e != nil {
+		if e := remotize(t, f, source); e != nil {
 			return e
 		}
 		f.Close()
@@ -287,7 +287,13 @@ func src2ast(src string) *ast.File {
 	return f
 }
 
-func remotize0(w io.Writer, source string) os.Error {
+type remotizeCtx struct {
+	pkg string
+	w   io.Writer
+}
+
+func remotize(t reflect.Type, w io.Writer, source string) os.Error {
+	rctx := remotizeCtx{packname(t), w}
 	f := src2ast(source)
 	//ast.Print(token.NewFileSet(), f)
 	rprefix := "remotize."
@@ -299,7 +305,7 @@ func remotize0(w io.Writer, source string) os.Error {
 			for _, spec := range gendecl.Specs {
 				if ts, ok := spec.(*ast.TypeSpec); ok {
 					if it, ok := ts.Type.(*ast.InterfaceType); ok {
-						return remotizeInterface(w, rprefix, ts.Name.Name, it)
+						return rctx.remotizeInterface(rprefix, ts.Name.Name, it)
 					}
 				}
 			}
@@ -308,68 +314,68 @@ func remotize0(w io.Writer, source string) os.Error {
 	return nil
 }
 
-func remotizeInterface(out io.Writer, rprefix, ifacename string,
+func (r *remotizeCtx) remotizeInterface(rprefix, ifacename string,
 iface *ast.InterfaceType) os.Error {
-	fmt.Fprintf(out, "// Autoregistry\n")
-	fmt.Fprintf(out, "func init() {\n")
-	fmt.Fprintf(out, "    %sRegister(Remote%s{},\n", rprefix, ifacename)
-	fmt.Fprintf(out, "        func(cli *rpc.Client) interface{} "+
+	fmt.Fprintf(r.w, "// Autoregistry\n")
+	fmt.Fprintf(r.w, "func init() {\n")
+	fmt.Fprintf(r.w, "    %sRegister(Remote%s{},\n", rprefix, ifacename)
+	fmt.Fprintf(r.w, "        func(cli *rpc.Client) interface{} "+
 		"{\n\t\t\treturn NewRemote%s(cli)\n\t\t},\n", ifacename)
-	fmt.Fprintf(out, "        %sService{},\n", ifacename)
-	fmt.Fprintf(out, "        func(srv *rpc.Server, i interface{}) "+
+	fmt.Fprintf(r.w, "        %sService{},\n", ifacename)
+	fmt.Fprintf(r.w, "        func(srv *rpc.Server, i interface{}) "+
 		" interface{} {\n\t\t\treturn New%sService(srv,i.(%s))\n\t\t},\n",
 		ifacename, ifacename)
-	fmt.Fprintf(out, "    )\n")
-	fmt.Fprintf(out, "}\n\n")
-	remoteInit(out, ifacename)
-	localInit(out, ifacename)
+	fmt.Fprintf(r.w, "    )\n")
+	fmt.Fprintf(r.w, "}\n\n")
+	r.remoteInit(ifacename)
+	r.localInit(ifacename)
 	for _, f := range iface.Methods.List {
 		if ft, ok := f.Type.(*ast.FuncType); ok {
-			wrapFunction(out, ifacename, f.Names[0].Name, ft)
+			r.wrapFunction(ifacename, f.Names[0].Name, ft)
 		}
 	}
-	//fmt.Println(out.String())
+	//fmt.Println(r.w.String())
 	return nil
 }
 
-func remoteInit(out io.Writer, ifacename string) {
-	fmt.Fprintf(out, "// Rpc service wrapper for %s\n", ifacename)
-	fmt.Fprintf(out, "type %sService struct {\n", ifacename)
-	fmt.Fprintf(out, "    srv %s\n", ifacename)
-	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Direct %sService constructor\n", ifacename)
-	fmt.Fprintf(out, "func New%sService(srv *rpc.Server, impl %s) *%sService {\n",
+func (r *remotizeCtx) remoteInit(ifacename string) {
+	fmt.Fprintf(r.w, "// Rpc service wrapper for %s\n", ifacename)
+	fmt.Fprintf(r.w, "type %sService struct {\n", ifacename)
+	fmt.Fprintf(r.w, "    srv %s\n", ifacename)
+	fmt.Fprintf(r.w, "}\n\n")
+	fmt.Fprintf(r.w, "// Direct %sService constructor\n", ifacename)
+	fmt.Fprintf(r.w, "func New%sService(srv *rpc.Server, impl %s) *%sService {\n",
 		ifacename, ifacename, ifacename)
-	fmt.Fprintf(out, "    r:=&%sService{impl}\n", ifacename)
-	fmt.Fprintf(out, "    srv.Register(r)\n")
-	fmt.Fprintf(out, "    return r\n")
-	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(r.w, "    r:=&%sService{impl}\n", ifacename)
+	fmt.Fprintf(r.w, "    srv.Register(r)\n")
+	fmt.Fprintf(r.w, "    return r\n")
+	fmt.Fprintf(r.w, "}\n\n")
 }
 
-func localInit(out io.Writer, ifacename string) {
-	fmt.Fprintf(out, "// Rpc client for %s\n", ifacename)
-	fmt.Fprintf(out, "type Remote%s struct {\n", ifacename)
-	fmt.Fprintf(out, "    cli *rpc.Client\n")
-	fmt.Fprintf(out, "}\n\n")
-	fmt.Fprintf(out, "// Direct Remote%s constructor\n", ifacename)
-	fmt.Fprintf(out, "func NewRemote%s(cli *rpc.Client) *Remote%s {\n",
+func (r *remotizeCtx) localInit(ifacename string) {
+	fmt.Fprintf(r.w, "// Rpc client for %s\n", ifacename)
+	fmt.Fprintf(r.w, "type Remote%s struct {\n", ifacename)
+	fmt.Fprintf(r.w, "    cli *rpc.Client\n")
+	fmt.Fprintf(r.w, "}\n\n")
+	fmt.Fprintf(r.w, "// Direct Remote%s constructor\n", ifacename)
+	fmt.Fprintf(r.w, "func NewRemote%s(cli *rpc.Client) *Remote%s {\n",
 		ifacename, ifacename)
-	fmt.Fprintf(out, "    return &Remote%s{cli}\n", ifacename)
-	fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(r.w, "    return &Remote%s{cli}\n", ifacename)
+	fmt.Fprintf(r.w, "}\n\n")
 }
 
-func wrapFunction(out io.Writer, iface, name string, fun *ast.FuncType) {
-	fmt.Fprintf(out, "// wrapper for: %s\n\n", name)
-	argcnt := generateStructWrapper(out, fun.Params, "Args", name)
-	results, inouts := prepareInOuts(fun.Params, fun.Results)
-	replycnt := generateStructWrapper(out, results, "Reply", name)
-	generateServerRPCWrapper(out, fun, iface, name, argcnt, replycnt, inouts)
-	generateClientRPCWrapper(out, fun, iface, name, argcnt, replycnt, inouts)
-	fmt.Fprintf(out, "\n")
+func (r *remotizeCtx) wrapFunction(iface, name string, fun *ast.FuncType) {
+	fmt.Fprintf(r.w, "// wrapper for: %s\n\n", name)
+	argcnt := r.generateStructWrapper(fun.Params, "Args", name)
+	results, inouts := r.prepareInOuts(fun.Params, fun.Results)
+	replycnt := r.generateStructWrapper(results, "Reply", name)
+	r.generateServerRPCWrapper(fun, iface, name, argcnt, replycnt, inouts)
+	r.generateClientRPCWrapper(fun, iface, name, argcnt, replycnt, inouts)
+	fmt.Fprintf(r.w, "\n")
 }
 
-func prepareInOuts(params *ast.FieldList, r *ast.FieldList) (*ast.FieldList,
-[]int) {
+func (r *remotizeCtx) prepareInOuts(params *ast.FieldList,
+results *ast.FieldList) (*ast.FieldList, []int) {
 	args := make([]*ast.Field, 0)
 	inouts := make([]int, 0)
 	for n, field := range params.List {
@@ -378,92 +384,97 @@ func prepareInOuts(params *ast.FieldList, r *ast.FieldList) (*ast.FieldList,
 			inouts = append(inouts, n)
 		}
 	}
-	if r == nil {
-		r = &ast.FieldList{List: args}
+	if results == nil {
+		results = &ast.FieldList{List: args}
 	} else {
-		r.List = append(r.List, args...)
+		results.List = append(results.List, args...)
 	}
-	return r, inouts
+	return results, inouts
 }
 
-func generateStructWrapper(out io.Writer, fun *ast.FieldList, structname,
+func (r *remotizeCtx) generateStructWrapper(fun *ast.FieldList, structname,
 name string) int {
-	fmt.Fprintf(out, "type %s_%s struct {\n", structname, name)
-	defer fmt.Fprintf(out, "}\n\n")
+	fmt.Fprintf(r.w, "type %s_%s struct {\n", structname, name)
+	defer fmt.Fprintf(r.w, "}\n\n")
 	argn := 0
 	if fun == nil || len(fun.List) == 0 {
 		return argn
 	}
 	for _, field := range fun.List {
-		fmt.Fprintf(out, "\t")
+		fmt.Fprintf(r.w, "\t")
 		// names
 		if field.Names != nil {
 			for j, _ := range field.Names {
-				fmt.Fprintf(out, "Arg%d", argn)
+				fmt.Fprintf(r.w, "Arg%d", argn)
 				if j != len(field.Names)-1 {
-					fmt.Fprintf(out, ", ")
+					fmt.Fprintf(r.w, ", ")
 				}
 				argn++
 			}
-			fmt.Fprintf(out, " ")
+			fmt.Fprintf(r.w, " ")
 		} else {
-			fmt.Fprintf(out, "Arg%d ", argn)
+			fmt.Fprintf(r.w, "Arg%d ", argn)
 			argn++
 		}
 
 		// type
-		prettyPrintTypeExpr(out, field.Type)
+		r.prettyPrintTypeExpr(r.w, field.Type)
 
 		// \n
-		fmt.Fprintf(out, "\n")
+		fmt.Fprintf(r.w, "\n")
 	}
 	return argn
 }
 
-func prettyPrintTypeExpr(out io.Writer, e ast.Expr) {
+func (r *remotizeCtx) prettyPrintTypeExpr(w io.Writer, e ast.Expr) {
 	ty := reflect.TypeOf(e)
 	switch t := e.(type) {
 	case *ast.StarExpr:
-		fmt.Fprintf(out, "*")
-		prettyPrintTypeExpr(out, t.X)
+		fmt.Fprintf(w, "*")
+		r.prettyPrintTypeExpr(w, t.X)
 	case *ast.Ident:
-		fmt.Fprintf(out, t.Name)
+		fmt.Fprintf(w, t.Name)
 	case *ast.ArrayType:
-		fmt.Fprintf(out, "[]")
-		prettyPrintTypeExpr(out, t.Elt)
+		fmt.Fprintf(w, "[]")
+		r.prettyPrintTypeExpr(w, t.Elt)
 	case *ast.SelectorExpr:
-		prettyPrintTypeExpr(out, t.X)
-		fmt.Fprintf(out, ".%s", t.Sel.Name)
-	case *ast.FuncType:
-		fmt.Fprintf(out, "func(")
-		prettyPrintFuncFieldList(out, t.Params)
-		fmt.Fprintf(out, ")")
-
 		buf := bytes.NewBuffer(make([]byte, 0, 256))
-		nresults := prettyPrintFuncFieldList(buf, t.Results)
+		r.prettyPrintTypeExpr(buf, t.X)
+		prefix := buf.String()
+		if prefix != r.pkg {
+			fmt.Fprintf(w, "%s.", prefix)
+		}
+		fmt.Fprintf(w, "%s", t.Sel.Name)
+	case *ast.FuncType:
+		fmt.Fprintf(w, "func(")
+		r.prettyPrintFuncFieldList(w, t.Params)
+		fmt.Fprintf(w, ")")
+		buf := bytes.NewBuffer(make([]byte, 0, 512))
+		nresults := r.prettyPrintFuncFieldList(buf, t.Results)
 		if nresults > 0 {
 			results := buf.String()
 			if strings.Index(results, " ") != -1 {
 				results = "(" + results + ")"
 			}
-			fmt.Fprintf(out, " %s", results)
+			fmt.Fprintf(w, " %s", results)
 		}
 	case *ast.MapType:
-		fmt.Fprintf(out, "map[")
-		prettyPrintTypeExpr(out, t.Key)
-		fmt.Fprintf(out, "]")
-		prettyPrintTypeExpr(out, t.Value)
+		fmt.Fprintf(w, "map[")
+		r.prettyPrintTypeExpr(w, t.Key)
+		fmt.Fprintf(w, "]")
+		r.prettyPrintTypeExpr(w, t.Value)
 	case *ast.InterfaceType:
-		fmt.Fprintf(out, "interface{}")
+		fmt.Fprintf(w, "interface{}")
 	case *ast.Ellipsis:
-		fmt.Fprintf(out, "...")
-		prettyPrintTypeExpr(out, t.Elt)
+		fmt.Fprintf(w, "...")
+		r.prettyPrintTypeExpr(w, t.Elt)
 	default:
-		fmt.Fprintf(out, "\n[!!] unknown type: %s\n", ty.String())
+		fmt.Fprintf(w, "\n[!!] unknown type: %s\n", ty.String())
 	}
 }
 
-func prettyPrintFuncFieldList(out io.Writer, f *ast.FieldList) int {
+func (r *remotizeCtx) prettyPrintFuncFieldList(w io.Writer,
+f *ast.FieldList) int {
 	count := 0
 	if f == nil {
 		return count
@@ -472,100 +483,100 @@ func prettyPrintFuncFieldList(out io.Writer, f *ast.FieldList) int {
 		// names
 		if field.Names != nil {
 			for j, name := range field.Names {
-				fmt.Fprintf(out, "%s", name.Name)
+				fmt.Fprintf(w, "%s", name.Name)
 				if j != len(field.Names)-1 {
-					fmt.Fprintf(out, ", ")
+					fmt.Fprintf(w, ", ")
 				}
 				count++
 			}
-			fmt.Fprintf(out, " ")
+			fmt.Fprintf(w, " ")
 		} else {
 			count++
 		}
 
 		// type
-		prettyPrintTypeExpr(out, field.Type)
+		r.prettyPrintTypeExpr(w, field.Type)
 
 		// ,
 		if i != len(f.List)-1 {
-			fmt.Fprintf(out, ", ")
+			fmt.Fprintf(w, ", ")
 		}
 	}
 	return count
 }
 
 // function that is being exposed to an RPC API, but calls simple "Server_" one
-func generateServerRPCWrapper(out io.Writer, fun *ast.FuncType,
+func (r *remotizeCtx) generateServerRPCWrapper(fun *ast.FuncType,
 iface, name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(out, "func (r *%sService) %s(args *Args_%s, "+
+	fmt.Fprintf(r.w, "func (r *%sService) %s(args *Args_%s, "+
 		"reply *Reply_%s) os.Error {\n", iface, name, name, name)
 
-	fmt.Fprintf(out, "\t")
+	fmt.Fprintf(r.w, "\t")
 	replies := replycnt - len(inouts)
 	for i := 0; i < replies; i++ {
-		fmt.Fprintf(out, "reply.Arg%d", i)
-		if i != replycnt-1 {
-			fmt.Fprintf(out, ", ")
+		fmt.Fprintf(r.w, "reply.Arg%d", i)
+		if i != replies-1 {
+			fmt.Fprintf(r.w, ", ")
 		}
 	}
 	if replies > 0 {
-		fmt.Fprintf(out, " = ")
+		fmt.Fprintf(r.w, " = ")
 	}
-	fmt.Fprintf(out, "r.srv.%s(", name)
+	fmt.Fprintf(r.w, "r.srv.%s(", name)
 	for i := 0; i < argcnt; i++ {
-		fmt.Fprintf(out, "args.Arg%d", i)
+		fmt.Fprintf(r.w, "args.Arg%d", i)
 		if i != argcnt-1 {
-			fmt.Fprintf(out, ", ")
+			fmt.Fprintf(r.w, ", ")
 		}
 	}
-	fmt.Fprintf(out, ")\n")
+	fmt.Fprintf(r.w, ")\n")
 	for i := replies; i < replycnt; i++ {
-		fmt.Fprintf(out, "\treply.Arg%d=args.Arg%d\n", i, inouts[i-replies])
+		fmt.Fprintf(r.w, "\treply.Arg%d=args.Arg%d\n", i, inouts[i-replies])
 	}
-	fmt.Fprintf(out, "\treturn nil\n}\n\n")
+	fmt.Fprintf(r.w, "\treturn nil\n}\n\n")
 }
 
-func generateClientRPCWrapper(out io.Writer, fun *ast.FuncType, iface,
+func (r *remotizeCtx) generateClientRPCWrapper(fun *ast.FuncType, iface,
 name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(out, "func (l *Remote%s) %s(", iface, name)
-	prettyPrintFuncFieldListUsingArgs(out, fun.Params)
-	fmt.Fprintf(out, ")")
+	fmt.Fprintf(r.w, "func (l *Remote%s) %s(", iface, name)
+	r.prettyPrintFuncFieldListUsingArgs(fun.Params)
+	fmt.Fprintf(r.w, ")")
 
 	buf := bytes.NewBuffer(make([]byte, 0, 256))
-	nresults := prettyPrintFuncFieldList(buf, fun.Results)
+	nresults := r.prettyPrintFuncFieldList(buf, fun.Results)
 	if nresults > 0 {
 		results := buf.String()
 		if strings.Index(results, " ") != -1 {
 			results = "(" + results + ")"
 		}
-		fmt.Fprintf(out, " %s", results)
+		fmt.Fprintf(r.w, " %s", results)
 	}
-	fmt.Fprintf(out, " {\n")
-	fmt.Fprintf(out, "\tvar args Args_%s\n", name)
-	fmt.Fprintf(out, "\tvar reply Reply_%s\n", name)
+	fmt.Fprintf(r.w, " {\n")
+	fmt.Fprintf(r.w, "\tvar args Args_%s\n", name)
+	fmt.Fprintf(r.w, "\tvar reply Reply_%s\n", name)
 	for i := 0; i < argcnt; i++ {
-		fmt.Fprintf(out, "\targs.Arg%d = Arg%d\n", i, i)
+		fmt.Fprintf(r.w, "\targs.Arg%d = Arg%d\n", i, i)
 	}
-	fmt.Fprintf(out, "\terr := l.cli.Call(\"%sService.%s\", &args, &reply)\n",
+	fmt.Fprintf(r.w, "\terr := l.cli.Call(\"%sService.%s\", &args, &reply)\n",
 		iface, name)
-	fmt.Fprintf(out, "\tif err != nil {\n")
-	fmt.Fprintf(out, "\t\tpanic(err.String())\n\t}\n")
+	fmt.Fprintf(r.w, "\tif err != nil {\n")
+	fmt.Fprintf(r.w, "\t\tpanic(err.String())\n\t}\n")
 
 	replies := replycnt - len(inouts)
 	for i := replies; i < replycnt; i++ {
-		fmt.Fprintf(out, "\t*Arg%d=*reply.Arg%d\n", i, inouts[i-replies])
+		fmt.Fprintf(r.w, "\t*Arg%d=*reply.Arg%d\n", i, inouts[i-replies])
 	}
-	fmt.Fprintf(out, "\treturn ")
+	fmt.Fprintf(r.w, "\treturn ")
 	for i := 0; i < replies; i++ {
-		fmt.Fprintf(out, "reply.Arg%d", i)
-		if i != replycnt-1 {
-			fmt.Fprintf(out, ", ")
+		fmt.Fprintf(r.w, "reply.Arg%d", i)
+		if i != replies-1 {
+			fmt.Fprintf(r.w, ", ")
 		}
 	}
-	fmt.Fprintf(out, "\n}\n\n")
+	fmt.Fprintf(r.w, "\n}\n\n")
 }
 
-func prettyPrintFuncFieldListUsingArgs(out io.Writer, f *ast.FieldList) int {
+func (r *remotizeCtx) prettyPrintFuncFieldListUsingArgs(f *ast.FieldList) int {
 	count := 0
 	if f == nil {
 		return count
@@ -574,24 +585,24 @@ func prettyPrintFuncFieldListUsingArgs(out io.Writer, f *ast.FieldList) int {
 		// names
 		if field.Names != nil {
 			for j, _ := range field.Names {
-				fmt.Fprintf(out, "Arg%d", count)
+				fmt.Fprintf(r.w, "Arg%d", count)
 				if j != len(field.Names)-1 {
-					fmt.Fprintf(out, ", ")
+					fmt.Fprintf(r.w, ", ")
 				}
 				count++
 			}
-			fmt.Fprintf(out, " ")
+			fmt.Fprintf(r.w, " ")
 		} else {
-			fmt.Fprintf(out, "Arg%d ", count)
+			fmt.Fprintf(r.w, "Arg%d ", count)
 			count++
 		}
 
 		// type
-		prettyPrintTypeExpr(out, field.Type)
+		r.prettyPrintTypeExpr(r.w, field.Type)
 
 		// ,
 		if i != len(f.List)-1 {
-			fmt.Fprintf(out, ", ")
+			fmt.Fprintf(r.w, ", ")
 		}
 	}
 	return count

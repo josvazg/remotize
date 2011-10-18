@@ -58,6 +58,7 @@ func TestTool(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	dir.GoFiles=append(dir.GoFiles,"tool_test.go")
 	fmt.Println("dir", dir)
 	tree, pkg, e := build.FindTree(".")
 	if e != nil {
@@ -74,4 +75,3 @@ func TestTool(t *testing.T) {
 		t.Fatal(e)
 	}*/
 }
-

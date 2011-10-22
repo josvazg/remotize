@@ -1,8 +1,8 @@
 package tool
 
 import (
-	/*"fmt"
-	"go/build"*/
+	//"fmt"
+	"go/build"
 	"testing"
 )
 
@@ -54,24 +54,24 @@ func TestTool(t *testing.T) {
 	if e := Remotize(new(ToolTester)); e != nil {
 		t.Fatal(e)
 	}
-	/*dir, e := build.ScanDir(".", false)
+	dir, e := build.ScanDir(".", false)
 	if e != nil {
 		t.Fatal(e)
 	}
 	dir.GoFiles=append(dir.GoFiles,"tool_test.go")
-	fmt.Println("dir", dir)
+	//fmt.Println("dir", dir)
 	tree, pkg, e := build.FindTree(".")
 	if e != nil {
 		t.Fatal(e)
 	}
-	fmt.Println("tree", tree, "pkg", pkg)
+	//fmt.Println("tree", tree, "pkg", pkg)
 	script, e := build.Build(tree, pkg, dir)
 	if e != nil {
 		t.Fatal(e)
 	}
-	fmt.Println("script", script)
+	//fmt.Println("script", script)
 	e = script.Run()
 	if e != nil {
 		t.Fatal(e)
-	}*/
+	}
 }

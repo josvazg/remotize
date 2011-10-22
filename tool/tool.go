@@ -78,7 +78,7 @@ func Remotize(i interface{}) os.Error {
 		}
 		header, decl := declare(t)
 		fmt.Fprintf(f, header)
-		if e := remotize(t, f, header+decl); e != nil {
+		if e := doremotize(t, f, header+decl); e != nil {
 			return e
 		}
 		f.Close()
@@ -93,7 +93,7 @@ func Remotize(i interface{}) os.Error {
 		}
 		header, decl := declare(t)
 		fmt.Fprintf(f, header+decl)
-		if e := remotize(t, f, header+decl); e != nil {
+		if e := doremotize(t, f, header+decl); e != nil {
 			return e
 		}
 		f.Close()
@@ -109,7 +109,7 @@ func Remotize(i interface{}) os.Error {
 			return e
 		}
 		fmt.Fprintln(f, source)
-		if e := remotize(t, f, source); e != nil {
+		if e := doremotize(t, f, source); e != nil {
 			return e
 		}
 		f.Close()
@@ -294,7 +294,7 @@ type remotizeCtx struct {
 	w   io.Writer
 }
 
-func remotize(t reflect.Type, w io.Writer, source string) os.Error {
+func doremotize(t reflect.Type, w io.Writer, source string) os.Error {
 	rctx := remotizeCtx{packname(t), w}
 	f := src2ast(source)
 	//ast.Print(token.NewFileSet(), f)
@@ -420,7 +420,7 @@ name string) int {
 		}
 
 		// type
-		r.prettyPrintTypeExpr(r.w, field.Type)
+		r.printTypeExpr(r.w, field.Type)
 
 		// \n
 		fmt.Fprintf(r.w, "\n")
@@ -428,20 +428,20 @@ name string) int {
 	return argn
 }
 
-func (r *remotizeCtx) prettyPrintTypeExpr(w io.Writer, e ast.Expr) {
+func (r *remotizeCtx) printTypeExpr(w io.Writer, e ast.Expr) {
 	ty := reflect.TypeOf(e)
 	switch t := e.(type) {
 	case *ast.StarExpr:
 		fmt.Fprintf(w, "*")
-		r.prettyPrintTypeExpr(w, t.X)
+		r.printTypeExpr(w, t.X)
 	case *ast.Ident:
 		fmt.Fprintf(w, t.Name)
 	case *ast.ArrayType:
-		fmt.Fprintf(w, "[]")
-		r.prettyPrintTypeExpr(w, t.Elt)
+		fmt.Fprintf(w, "[%v]", solveName(t.Len))
+		r.printTypeExpr(w, t.Elt)
 	case *ast.SelectorExpr:
 		buf := bytes.NewBuffer(make([]byte, 0, 256))
-		r.prettyPrintTypeExpr(buf, t.X)
+		r.printTypeExpr(buf, t.X)
 		prefix := buf.String()
 		if prefix != r.pkg {
 			fmt.Fprintf(w, "%s.", prefix)
@@ -449,10 +449,10 @@ func (r *remotizeCtx) prettyPrintTypeExpr(w io.Writer, e ast.Expr) {
 		fmt.Fprintf(w, "%s", t.Sel.Name)
 	case *ast.FuncType:
 		fmt.Fprintf(w, "func(")
-		r.prettyPrintFuncFieldList(w, t.Params)
+		r.printFuncFieldList(w, t.Params)
 		fmt.Fprintf(w, ")")
 		buf := bytes.NewBuffer(make([]byte, 0, 512))
-		nresults := r.prettyPrintFuncFieldList(buf, t.Results)
+		nresults := r.printFuncFieldList(buf, t.Results)
 		if nresults > 0 {
 			results := buf.String()
 			if strings.Index(results, " ") != -1 {
@@ -462,20 +462,20 @@ func (r *remotizeCtx) prettyPrintTypeExpr(w io.Writer, e ast.Expr) {
 		}
 	case *ast.MapType:
 		fmt.Fprintf(w, "map[")
-		r.prettyPrintTypeExpr(w, t.Key)
+		r.printTypeExpr(w, t.Key)
 		fmt.Fprintf(w, "]")
-		r.prettyPrintTypeExpr(w, t.Value)
+		r.printTypeExpr(w, t.Value)
 	case *ast.InterfaceType:
 		fmt.Fprintf(w, "interface{}")
 	case *ast.Ellipsis:
 		fmt.Fprintf(w, "...")
-		r.prettyPrintTypeExpr(w, t.Elt)
+		r.printTypeExpr(w, t.Elt)
 	default:
 		fmt.Fprintf(w, "\n[!!] unknown type: %s\n", ty.String())
 	}
 }
 
-func (r *remotizeCtx) prettyPrintFuncFieldList(w io.Writer,
+func (r *remotizeCtx) printFuncFieldList(w io.Writer,
 f *ast.FieldList) int {
 	count := 0
 	if f == nil {
@@ -497,7 +497,7 @@ f *ast.FieldList) int {
 		}
 
 		// type
-		r.prettyPrintTypeExpr(w, field.Type)
+		r.printTypeExpr(w, field.Type)
 
 		// ,
 		if i != len(f.List)-1 {
@@ -507,7 +507,7 @@ f *ast.FieldList) int {
 	return count
 }
 
-// function that is being exposed to an RPC API, but calls simple "Server_" one
+// function that is valeing exposed to an RPC API, but calls simple "Server_" one
 func (r *remotizeCtx) generateServerRPCWrapper(fun *ast.FuncType,
 iface, name string, argcnt, replycnt int, inouts []int) {
 	fmt.Fprintf(r.w, "func (r *%sService) %s(args *Args_%s, "+
@@ -541,11 +541,11 @@ iface, name string, argcnt, replycnt int, inouts []int) {
 func (r *remotizeCtx) generateClientRPCWrapper(fun *ast.FuncType, iface,
 name string, argcnt, replycnt int, inouts []int) {
 	fmt.Fprintf(r.w, "func (l *Remote%s) %s(", iface, name)
-	r.prettyPrintFuncFieldListUsingArgs(fun.Params)
+	r.printFuncFieldListUsingArgs(fun.Params)
 	fmt.Fprintf(r.w, ")")
 
 	buf := bytes.NewBuffer(make([]byte, 0, 256))
-	nresults := r.prettyPrintFuncFieldList(buf, fun.Results)
+	nresults := r.printFuncFieldList(buf, fun.Results)
 	if nresults > 0 {
 		results := buf.String()
 		if strings.Index(results, " ") != -1 {
@@ -566,19 +566,19 @@ name string, argcnt, replycnt int, inouts []int) {
 
 	replies := replycnt - len(inouts)
 	for i := replies; i < replycnt; i++ {
-		fmt.Fprintf(r.w, "\t*Arg%d=*reply.Arg%d\n", i, inouts[i-replies])
+		fmt.Fprintf(r.w, "\t*reply.Arg%d=*args.Arg%d\n", i, inouts[i-replies])
 	}
 	fmt.Fprintf(r.w, "\treturn ")
-	for i := 0; i < replies; i++ {
+	for i := 0; i < replycnt; i++ {
 		fmt.Fprintf(r.w, "reply.Arg%d", i)
-		if i != replies-1 {
+		if i != replycnt-1 {
 			fmt.Fprintf(r.w, ", ")
 		}
 	}
 	fmt.Fprintf(r.w, "\n}\n\n")
 }
 
-func (r *remotizeCtx) prettyPrintFuncFieldListUsingArgs(f *ast.FieldList) int {
+func (r *remotizeCtx) printFuncFieldListUsingArgs(f *ast.FieldList) int {
 	count := 0
 	if f == nil {
 		return count
@@ -600,7 +600,7 @@ func (r *remotizeCtx) prettyPrintFuncFieldListUsingArgs(f *ast.FieldList) int {
 		}
 
 		// type
-		r.prettyPrintTypeExpr(r.w, field.Type)
+		r.printTypeExpr(r.w, field.Type)
 
 		// ,
 		if i != len(f.List)-1 {
@@ -1027,6 +1027,9 @@ func Autoremotize(files ...string) (int, os.Error) {
 
 // solveName is given an ast node and tries to solve its name
 func solveName(e interface{}) string {
+	if e == nil {
+		return ""
+	}
 	switch (e).(type) {
 	case *ast.Field:
 		return solveName((interface{})(e).(*ast.Field).Type)
@@ -1051,6 +1054,9 @@ func solveName(e interface{}) string {
 			prefix = "*"
 		}
 		return prefix + solveName(ue.X)
+	case *ast.BasicLit:
+		bl := (e).(*ast.BasicLit)
+		return bl.Value
 	case *ast.CompositeLit:
 		cl := (e).(*ast.CompositeLit)
 		if cl.Type != nil {
@@ -1098,4 +1104,3 @@ func Golink() string {
 func Goext() string {
 	return Goexec("")
 }
-

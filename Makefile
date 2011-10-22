@@ -14,7 +14,7 @@ cleandeps:
 
 all: buildeps
 
-buildeps:  tool/_obj _obj pipe/_obj
+buildeps:  tool/_obj pipe/_obj
 #	cd goremote && gotest
 	gomake -C goremote install
 

@@ -2,7 +2,6 @@ package remotize
 
 import (
 	"reflect"
-	"github.com/josvazg/remotize/misc"
 	"rpc"
 	"testing"
 )
@@ -38,7 +37,7 @@ func checkType(t *testing.T, typename string, i interface{}) {
 }
 
 func TestRegistry(t *testing.T) {
-	misc.Register(RemoteSometyper{}, BuildRemoteSometyper,
+	Register(RemoteSometyper{}, BuildRemoteSometyper,
 		SometyperService{}, BuildSometyperService)
 	s := NewService(rpc.NewServer(), new(Sometyper))
 	checkType(t, "SometyperService", s)

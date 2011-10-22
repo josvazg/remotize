@@ -12,18 +12,16 @@ cleandeps:
 	gomake -C tool clean
 	gomake -C goremote clean
 
-all: buildeps
+all: test buildeps
 
 buildeps:  tool/_obj pipe/_obj
 #	cd goremote && gotest
 	gomake -C goremote install
 
 tool/_obj: _obj tool/tool.go
+	echo test and install TOOL
 	gomake -C tool test install
 	rm tool/remotized*.go
-
-_obj: remotize.go
-	gomake test install
 
 pipe/_obj: pipe/pipe.go
 	gomake -C pipe install

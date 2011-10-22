@@ -112,7 +112,6 @@ func Register(r interface{}, br BuildRemote, s interface{}, bs BuildService) {
 	defer lock.Unlock()
 	registry[cname] = br
 	registry[sname] = bs
-    
 }
 
 // DumpRegistry dumps the contents of the registry for debugging purposes 

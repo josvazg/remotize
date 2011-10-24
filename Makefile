@@ -19,7 +19,6 @@ buildeps:  tool/_obj pipe/_obj
 	gomake -C goremote install
 
 tool/_obj: _obj tool/tool.go
-	echo test and install TOOL
 	gomake -C tool test install
 	rm tool/remotized*.go
 

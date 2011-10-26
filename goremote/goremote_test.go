@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"go/build"
+	//"fmt"
+	//"go/build"
 	"io"
 	"github.com/josvazg/remotize/tool"
 	"os"
@@ -39,6 +39,10 @@ func dieOnError(t *test.T, e os.Error) {
 func TestRemotize(t *test.T) {
 	tool.Remotize(new(Calcer))
 	tool.Remotize(&URLStore{})
+	/*dir, e := build.ScanDir("subtest", false)
+	if e != nil {
+		t.Fatal(e)
+	}
 	tree, pkg, e := build.FindTree("github.com/remotize/goremote/subtest/subtest.go")
 	dieOnError(t, e)
 	fmt.Println("tree:", tree.Path, tree.Goroot)
@@ -55,7 +59,7 @@ func TestRemotize(t *test.T) {
 	fmt.Println("build script:", s)
 	e = s.Run()
 	dieOnError(t, e)
-	fmt.Println("built")
+	fmt.Println("built")*/
 
 	/*	if e := os.MkdirAll("_subtest", 0775); e != nil {
 			t.Fatal(e.String())

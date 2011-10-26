@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"josvazg/remotize"
+	"github.com/josvazg/remotize"
 	"rpc"
 	test "testing"
 )

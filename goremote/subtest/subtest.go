@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"josvazg/remotize"
+	"github.com/josvazg/remotize"
 	"rpc"
 	test "testing"
 	"container/vector"

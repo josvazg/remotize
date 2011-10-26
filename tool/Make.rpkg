@@ -1,4 +1,4 @@
-# Make.prepkg allows to run precompile actions before standard go build process
+# Make.rpkg allows to run goremote before standard go build process
 
 ifndef PREBUILD
 	PREBUILD=remotized*.go
@@ -11,7 +11,7 @@ install: $(PREBUILD)
 $(PREBUILD): $(GOFILES)
 	goremote $(GOFILES)
 
-GOFILES+=$(PREBUILD)
+#GOFILES+=$(PREBUILD)
 
 include $(GOROOT)/src/Make.pkg
 

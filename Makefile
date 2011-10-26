@@ -18,7 +18,7 @@ buildeps:  tool/_obj pipe/_obj
 #	cd goremote && gotest
 	gomake -C goremote install
 
-tool/_obj: _obj tool/tool.go
+tool/_obj: _obj install tool/tool.go
 	gomake -C tool test install
 	rm tool/remotized*.go
 

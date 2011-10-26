@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"github.com/josvazg/remotize/misc"
+	"github.com/josvazg/remotize"
 	"sort"
 	"strconv"
 	"strings"
@@ -143,7 +143,7 @@ func declare(t reflect.Type) (header string, decl string) {
 		st := t
 		for ; st.Kind() == reflect.Ptr; st = t.Elem() {
 		}
-		dcl = newDeclaration(t, "type "+st.Name()+misc.Suffix(st.Name())+
+		dcl = newDeclaration(t, "type "+st.Name()+remotize.Suffix(st.Name())+
 			" interface")
 	}
 	dcl.methods(t)
@@ -662,7 +662,7 @@ func fixPack(r *rinfo, name string) string {
 
 // ifaceName returns the correspondent interface name for a given type
 func ifacename(name string) string {
-	return strings.TrimLeft(name, " *") + misc.Suffix(name)
+	return strings.TrimLeft(name, " *") + remotize.Suffix(name)
 }
 
 // markType marks an incomplete type by name. If it contains a package name

@@ -2,13 +2,14 @@ package sample
 
 import (
 	"fmt"
-	"github.com/josvazg/remotize"
 	"http"
 	"net"
+	"os"
+	"rpc"
 	test "testing"
 )
 
-func dieOnError(e os.Error) {
+func dieOnError(t *test.T, e os.Error) {
 	if e != nil {
 		t.Fatal("listen error:", e)
 	}
@@ -17,26 +18,23 @@ func dieOnError(e os.Error) {
 func fireUpCalcerServer(t *test.T) string {
 	server := rpc.NewServer()
 	// You can access the remotized code directly, it should be created by now...
-	calcer:=remotize.NewCalcerService(server,new(Calc))
-	if calcer == nil {
-		t.Fatal("Calcer server could NOT be created!")
-	}
-	addr=":1234"
+	NewCalcerService(server,new(Calc))
+	addr:=":1234"
 	l, e := net.Listen("tcp", addr)
-	dieOnError(e)
+	dieOnError(t,e)
 	go http.Serve(l, nil)
-	return addr
+	return "localhost"+addr
 }
 
-func getRemoteRef(saddr string) Calcer {
+func getRemoteRef(t *test.T, saddr string) Calcer {
 	client, e := rpc.DialHTTP("tcp", saddr)
-	dieOnError(e)
-	return remotize.NewRemoteCalcer(client)
+	dieOnError(t,e)
+	return NewRemoteCalcer(client)
 }
 
 func TestRemotize(t *test.T) {
-	serveraddr:=fireUpCalcerServer()
-	rcalc:=getRemoteRef(serveraddr)
+	serveraddr:=fireUpCalcerServer(t)
+	rcalc:=getRemoteRef(t,serveraddr)
 	fmt.Println("-.5+2.7=",rcalc.Add(-.5, 2.7))
 }
 

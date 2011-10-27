@@ -12,7 +12,7 @@ import (
 
 func init() {
 	// This marks URLStore as remotizable
-	remotize.Please(URLStore)
+	remotize.Please(new(URLStore))
 }
 
 // Some type without interface
@@ -28,9 +28,9 @@ func (s *URLStore) Get(key string) string {
 }
 
 func (s *URLStore) Set(key, url string) bool {
-	s.lock.Lock()
+	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s,present:=store[key]
+	_,present:=s.store[key]
 	if present {
 		return false
 	}

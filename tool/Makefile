@@ -1,7 +1,7 @@
 include $(GOROOT)/src/Make.inc
 
 TARG=github.com/josvazg/remotize/tool
-GOFILES=tool.go
+GOFILES=detect.go gen.go
 
 include $(GOROOT)/src/Make.pkg
 

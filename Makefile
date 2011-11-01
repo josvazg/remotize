@@ -13,13 +13,13 @@ cleandeps:
 	gomake -C goremote clean
 	gomake -C sample clean
 
-all: $(GOROOT)/src/Make.rpkg test buildeps sample/_obj
+all: $(GOROOT)/src/Make.rpkg test goremote/_obj sample/_obj
 
-buildeps:  tool/_obj pipe/_obj
+goremote/_obj:  goremote/goremote.go tool/_obj pipe/_obj
 	#cd goremote && gotest
 	gomake -C goremote install
 
-tool/_obj: _obj tool/tool.go
+tool/_obj: _obj tool/tool.go tool/tool_test.go
 	gomake -C tool test install
 	rm tool/remotized*.go
 

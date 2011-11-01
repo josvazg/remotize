@@ -28,9 +28,10 @@ func filterRemotized(names []string) []string {
 // Main invoked Autoremotize()
 func main() {
 	flag.Parse()
+	files:=filterRemotized(flag.Args())
 	if len(flag.Args()) > 0 {
-		fmt.Println("remotize/goremote is scanning", filterRemotized(flag.Args()), "...")
-		tool.Autoremotize(flag.Args()...)
+		fmt.Println("remotize/goremote is scanning", files , "...")
+		tool.Autoremotize(files...)
 		fmt.Println("remotize/goremote tool ends")
 	} else {
 		fmt.Println("No source files provided to remotize/goremote!")

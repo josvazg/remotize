@@ -19,7 +19,7 @@ goremote/_obj:  goremote/goremote.go tool/_obj pipe/_obj
 	#cd goremote && gotest
 	gomake -C goremote install
 
-tool/_obj: _obj tool/tool.go tool/tool_test.go
+tool/_obj: _obj tool/gen.go tool/detect.go tool/tool_test.go
 	gomake -C tool test install
 	rm tool/remotized*.go
 

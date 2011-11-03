@@ -186,6 +186,7 @@ func header(d *Detected, name string) string {
 	c := d.candidates[name]
 	tmpbuf := bytes.NewBufferString(ifacename(name) + specSeparator +
 		"package " + d.currpack + "\n\n")
+	c.packs=append(c.packs,"rpc")
 	if c.packs != nil && len(c.packs) > 0 {
 		fmt.Fprintf(tmpbuf, "import (\n")
 		for _, pack := range c.packs {

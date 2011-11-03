@@ -52,6 +52,7 @@ func Please(i interface{}) {
 // 's' RpcServer as transport, so that remote instances will be able to call
 // ifaceimple methods.
 func NewService(s *rpc.Server, ifaceimpl interface{}) interface{} {
+
 	return NewServiceWith(s, ifaceimpl, ifaceimpl)
 }
 
@@ -116,9 +117,9 @@ func Register(r interface{}, br BuildRemote, s interface{}, bs BuildService) {
 
 // DumpRegistry dumps the contents of the registry for debugging purposes 
 func DumpRegistry() string {
-    var s string
-    fmt.Sprintf(s,"%v",registry)
-    return s
+	var s string
+	fmt.Sprintf(s, "%v", registry)
+	return s
 }
 
 // RegistryFind will find a registered name in the remotize registry

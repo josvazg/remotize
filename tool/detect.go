@@ -17,33 +17,30 @@ import (
 	"strings"
 )
 
-// Candidate States
-const (
-	proposedInterface = iota
-	someType
-	someInterface
-)
-
 const (
 	redefinedMarker = "\n// Redefined\n"
 	specSeparator   = ":\n"
 )
 
 // Candidate holds a type or interface candidate to be remotized (or not)
-type candidate struct {
+/*type candidate struct {
 	state int
 	value interface{}
 	packs []string
-}
+}*/
 
 // remotizable detected info
 type Detected struct {
 	currpack   string
 	aliases    map[string]string
 	methods    map[string][]*ast.FuncDecl
-	candidates map[string]*candidate
+	interfaces map[string]*ast.InterfaceType
+	RInterfaces      map[string]*ast.InterfaceType
+	RDeclarations map[]string]*declaration
+	RTypes	[]string
+	/*candidates map[string]*candidate
 	sources    map[string]string
-	types      []string
+	types      []string*/
 }
 
 /*
@@ -79,10 +76,11 @@ func Autoremotize(files ...string) (int, os.Error) {
 func detect(files ...string) (*Detected, os.Error) {
 	d := &Detected{}
 	d.aliases = make(map[string]string)
-	d.candidates = make(map[string]*candidate)
 	d.methods = make(map[string][]*ast.FuncDecl)
-	d.sources = make(map[string]string)
-	d.types = make([]string, 0)
+	d.interfaces = make(map[string]*ast.InterfaceType)
+	d.RInterfaces = make(map[string]*ast.InterfaceType)
+	d.RDeclarations = make(map[string]*declaration)
+	d.RTypes = make([]string],0)
 	for _, f := range files {
 		//fmt.Println("Parsing ", f, "?") 
 		file, e := parser.ParseFile(token.NewFileSet(), f, nil,
@@ -105,35 +103,159 @@ func detect(files ...string) (*Detected, os.Error) {
 	return d, nil
 }
 
-// postProcess completes candidate types with their methods (retrieved by 
-// parseMethods) and pass them and the interfaces found as sources within Detected
-func postProcess(d *Detected) {
-	for name, can := range d.candidates { // complete types with methods
-		if can.state == someType && can.value != nil {
-			src := can.value.(*bytes.Buffer)
-			if d.methods[name] != nil {
-				for _, fdecl := range d.methods[name] {
-					method := solveName(fdecl.Name)
-					ast.Walk(can, fdecl)
-					tmpbuf := bytes.NewBufferString("")
-					printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
-					signature := tmpbuf.String()[4:]
-					fmt.Fprintf(src, "\n\t%s%s", method, signature)
-				}
-				fmt.Fprintf(src, "\n}\n")
-				d.sources[name] = header(d, name) + src.String()
+// Visit parses the whole source code
+func (d *Detected) Visit(n ast.Node) (w ast.Visitor) {
+	switch dcl := n.(type) {
+	case *ast.GenDecl:
+		d.parseComment(dcl)
+	case *ast.FuncDecl:
+		d.parseMethods(dcl)
+	case *ast.CallExpr:
+		d.parseCalls(dcl)
+	case *ast.TypeSpec:
+		d.parseTypes(dcl)
+	case *ast.ImportSpec:
+		d.parseImports(dcl)
+	}
+	return d
+}
+
+// parseComment will search for interfaces or types in the source code preceeded 
+// by a comment ending with '(remotize)' and will mark them for remotization
+func (d *Detected) parseComment(decl *ast.GenDecl) {
+	if decl.Doc == nil || decl.Specs == nil || len(decl.Specs) == 0 {
+		return
+	}
+	tspec, ok := decl.Specs[0].(*ast.TypeSpec)
+	if !ok {
+		return
+	}
+	name := solveName(tspec.Name)
+	i := len(decl.Doc.List) - 1
+	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
+	}
+	if i >= 0 {
+		cmt := decl.Doc.List[i]
+		c := string(cmt.Text)
+		if strings.Contains(strings.ToLower(c), "(remotize)") {
+			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
+				fmt.Println("Interface from comments:", name)
+				d.RInterfaces[name] = it
+			} else {
+				fmt.Println("Type from comments: (*)", name)
+				d.markType(name)
 			}
 		}
 	}
-	for name, can := range d.candidates {
-		if can.state == someInterface || can.state == someType {
-			if it, ok := can.value.(*ast.InterfaceType); ok {
-				ast.Walk(can, it)
-				src := bytes.NewBufferString("type " + name + " ")
-				printer.Fprint(src, token.NewFileSet(), it)
-				fmt.Fprintf(src, "\n")
-				d.sources[name] = header(d, name) + redefinedMarker + src.String()
+}
+
+// parseTypes will collect interface definition just in case there are 
+// confirmed by some call as 'remotizable' 
+func (d *Detected) parseTypes(tspec *ast.TypeSpec) {
+	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
+		name := solveName(tspec.Name)
+		if _, ok := d.RInterfaces[name]; !ok {
+			if _, ok := d.interfaces[name]; !ok {
+				fmt.Println("Purposed interface:", name)
+				d.interfaces[name] = it
 			}
+		}
+	}
+}
+
+// parseCalls will detect invocations of remotize calls like remotize.Please,
+// remotize.NewRemote, remotize.NewServiceWith or NewRemoteXXX / NewXXXService
+func (d *Detected) parseCalls(call *ast.CallExpr) {
+	if call.Fun == nil {
+		return
+	}
+	name := solveName(call.Fun)
+	var called string
+	if name == "" {
+		return
+	} else if name == "remotize.Please" {
+		called = solveName(call.Args[0])
+	} else if name == "remotize.NewRemote" || name == "remotize.NewServiceWith" {
+		called = solveName(call.Args[1])
+	} else if startsWith(name, "remotize.NewRemote") {
+		called = name[len("remotize.NewRemote"):]
+	} else if startsWith(name, "New") && endsWith(name, "Service") {
+		called = name[len("New") : len(name)-len("Service")]
+	} else {
+		return
+	}
+	if called != "" {
+		if startsWith(called, "*") {
+			called = called[1:]
+		}
+		if it, ok := d.interfaces[called]; ok {
+			fmt.Println("Interface from calls:", called, "value", it)
+			d.RInterfaces[called]=it
+		} else {
+			fmt.Println("Type or Interface Candidate from calls:", called)
+			d.mark(called)
+		}
+	}
+}
+
+// parseMethods will search for method Function Declarations in the source code
+func (d *Detected) parseMethods(fdecl *ast.FuncDecl) {
+	if fdecl.Recv == nil || fdecl.Name == nil ||
+		!isExported(solveName(fdecl.Name)) {
+		return
+	}
+	recv := solveName(fdecl.Recv.List[0])
+	ml := d.methods[recv]
+	if ml == nil {
+		ml = make([]*ast.FuncDecl, 0)
+	}
+	ml = append(ml, fdecl)
+	d.methods[recv] = ml
+	fmt.Println("Recorded method for", recv, ":", *fdecl)
+}
+
+// parseImports will process imports for detection on each file's source code
+func (d *Detected) parseImports(ispec *ast.ImportSpec) {
+	path := strings.Trim(ispec.Path.Value, "\"")
+	name := path
+	if strings.Contains(path, "/") {
+		parts := strings.Split(path, "/")
+		name = parts[len(parts)-1]
+	}
+	if ispec.Name != nil {
+		d.aliases[name] = ispec.Name.Name
+	} else if name != path {
+		d.aliases[name] = path
+	}
+}
+
+// postProcess completes candidate types with their methods (retrieved by 
+// parseMethods) and pass them and the interfaces found as sources within Detected
+func postProcess(d *Detected) {
+	for name, dcl := range d.RDeclarations { // complete types with methods
+		if d.methods[name] != nil {
+			for _, fdecl := range d.methods[name] {
+				method := solveName(fdecl.Name)
+				ast.Walk(dcl, fdecl)
+				tmpbuf := bytes.NewBufferString("")
+				printer.Fprint(tmpbuf, token.NewFileSet(), fdecl.Type)
+				signature := tmpbuf.String()[4:]
+				fmt.Fprintf(dcl.src, "\n\t%s%s", method, signature)
+			}
+			fmt.Fprintf(src, "\n}\n")
+			tmpbuf := bytes.NewBufferString("")
+			fmt.Fprintf(tmpbuf, "%s%s",header(d,name),dcl.src.String())
+			dcl.src=tmpbuf
+		}
+	}
+	for name, it := range d.interfaces {
+		if it!=nil {
+			ast.Walk(dcl, it)
+			src := bytes.NewBufferString("type " + name + " ")
+			printer.Fprint(src, token.NewFileSet(), it)
+			fmt.Fprintf(src, "\n")
+			d.sources[name] = ifacename(name) + specSeparator + header(d, name) + 
+					redefinedMarker + src.String()
 		}
 	}
 }
@@ -182,7 +304,7 @@ func solveName(e interface{}) string {
 }
 
 // header generates the package and imports header for a candidate
-func header(d *Detected, name string) string {
+/*func header(d *Detected, name string) string {
 	c := d.candidates[name]
 	tmpbuf := bytes.NewBufferString(ifacename(name) + specSeparator +
 		"package " + d.currpack + "\n\n")
@@ -199,154 +321,23 @@ func header(d *Detected, name string) string {
 		fmt.Fprintf(tmpbuf, ")\n\n")
 	}
 	return tmpbuf.String()
-}
-
-// Visit parses the whole source code
-func (d *Detected) Visit(n ast.Node) (w ast.Visitor) {
-	switch dcl := n.(type) {
-	case *ast.GenDecl:
-		d.parseComment(dcl)
-	case *ast.FuncDecl:
-		d.parseMethods(dcl)
-	case *ast.CallExpr:
-		d.parseCalls(dcl)
-	case *ast.TypeSpec:
-		d.parseTypes(dcl)
-	case *ast.ImportSpec:
-		d.parseImports(dcl)
-	}
-	return d
-}
-
-// parseComment will search for interfaces or types in the source code preceeded 
-// by a comment ending with '(remotize)' and will mark them for remotization
-func (d *Detected) parseComment(decl *ast.GenDecl) {
-	if decl.Doc == nil || decl.Specs == nil || len(decl.Specs) == 0 {
-		return
-	}
-	tspec, ok := decl.Specs[0].(*ast.TypeSpec)
-	if !ok {
-		return
-	}
-	name := solveName(tspec.Name)
-	i := len(decl.Doc.List) - 1
-	for ; i >= 0 && empty(decl.Doc.List[i].Text); i-- {
-	}
-	if i >= 0 {
-		cmt := decl.Doc.List[i]
-		c := string(cmt.Text)
-		if strings.Contains(strings.ToLower(c), "(remotize)") {
-			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
-				fmt.Println("Interface from comments:", name)
-				d.candidates[name] = &candidate{someInterface, it, nil}
-			} else {
-				fmt.Println("Type from comments: (*)", name)
-				d.markType(name)
-				d.markType("*"+name)
-			}
-		}
-	}
-}
-
-// parseTypes will collect interface definition just in case there are 
-// confirmed by some call as 'remotizable' 
-func (d *Detected) parseTypes(tspec *ast.TypeSpec) {
-	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
-		name := solveName(tspec.Name)
-		if _, ok := d.candidates[name]; !ok {
-			d.candidates[name] = &candidate{proposedInterface, it, nil}
-			//fmt.Println("Purposed interface:", name)
-		}
-	}
-}
-
-// parseCalls will detect invocations of remotize calls like remotize.Please,
-// remotize.NewRemote, remotize.NewServiceWith or NewRemoteXXX / NewXXXService
-func (d *Detected) parseCalls(call *ast.CallExpr) {
-	if call.Fun == nil {
-		return
-	}
-	name := solveName(call.Fun)
-	var called string
-	if name == "" {
-		return
-	} else if name == "remotize.Please" {
-		called = solveName(call.Args[0])
-	} else if name == "remotize.NewRemote" || name == "remotize.NewServiceWith" {
-		called = solveName(call.Args[1])
-	} else if startsWith(name, "remotize.NewRemote") {
-		called = name[len("remotize.NewRemote"):]
-	} else if startsWith(name, "New") && endsWith(name, "Service") {
-		called = name[len("New") : len(name)-len("Service")]
-	} else {
-		return
-	}
-	if called != "" {
-		if startsWith(called, "*") {
-			called = called[1:]
-		}
-		fmt.Println("called=", called, " d.candidates=", d.candidates)
-		if can, ok := d.candidates[called]; ok {
-			if can.state == proposedInterface {
-				can.state = someInterface
-				fmt.Println("Interface from calls:", called, "value", can.value)
-			}
-		} else {
-			fmt.Println("Type or Interface Candidate from calls:", called)
-			d.mark(called)
-		}
-	}
-}
-
-// parseMethods will search for method Function Declarations in the source code
-func (d *Detected) parseMethods(fdecl *ast.FuncDecl) {
-	if fdecl.Recv == nil || fdecl.Name == nil ||
-		!isExported(solveName(fdecl.Name)) {
-		return
-	}
-	recv := solveName(fdecl.Recv.List[0])
-	ml := d.methods[recv]
-	if ml == nil {
-		ml = make([]*ast.FuncDecl, 0)
-	}
-	ml = append(ml, fdecl)
-	d.methods[recv] = ml
-	fmt.Println("Recorded method for", recv, ":", *fdecl)
-}
-
-// parseImports will process imports for detection on each file's source code
-func (d *Detected) parseImports(ispec *ast.ImportSpec) {
-	path := strings.Trim(ispec.Path.Value, "\"")
-	name := path
-	if strings.Contains(path, "/") {
-		parts := strings.Split(path, "/")
-		name = parts[len(parts)-1]
-	}
-	if ispec.Name != nil {
-		d.aliases[name] = ispec.Name.Name
-		//fmt.Println("import aliases", r.aliases)
-	} else if name != path {
-		d.aliases[name] = path
-		//fmt.Println("* import aliases", r.aliases)
-	}
-}
+}*/
 
 // markType marks an incomplete type by name. If it contains a package name
-// is alrea dy defined on a another package and the name is enough. But if
+// is already defined on a another package and the name is enough. But if
 // its from this package the methods must be discovered from source code
 func (d *Detected) mark(name string) {
 	if strings.Contains(name, ".") {
-		d.types = append(d.types, name)
-		return
+		d.RTypes = append(d.RTypes, name)
+	} else {
+		d.markType(name)	
 	}
-	d.markType(name)
 }
 
 // markType marks an type or interface given its name ready to hold methods
 func (d *Detected) markType(name string) {
-	typesrc := bytes.NewBufferString("type " + ifacename(name) + " interface {")
-	d.candidates[name] = &candidate{someType, typesrc, []string{"rpc"}}
-	fmt.Println("Incomplete type:", name, "r.candidates[name]=", d.candidates[name])
+	d.RDeclarations[name] = newDeclaration(nil,"type " + ifacename(name) + " interface {")
+	d.RDeclarations["*"+name] = newDeclaration(nil,"type " + ifacename(name) + " interface {")
 }
 
 // startsWith returns true if str starts with substring s
@@ -376,24 +367,25 @@ func empty(s string) bool {
 }
 
 // Visit parses a candidate interface source code
-func (c *candidate) Visit(n ast.Node) (w ast.Visitor) {
-	switch d := n.(type) {
+func (d *declaration) Visit(n ast.Node) (w ast.Visitor) {
+	switch t := n.(type) {
 	case ast.Expr:
-		name := solveName(d)
+		name := solveName(t)
 		if strings.Contains(name, ".") {
-			if c.packs == nil {
-				c.packs = make([]string, 0)
+			if d.imports == nil {
+				d.imports = make(map[string]string, 0)
 			}
 			parts := strings.Split(name, ".")
-			for _, p := range c.packs {
+			for _, p := range d.imports {
 				if p == parts[0] {
 					return
 				}
 			}
-			c.packs = append(c.packs, parts[0])
+			d.imports[parts[0]] = parts[0]
 		}
 	case *ast.BlockStmt:
 		return nil
 	}
 	return c
 }
+

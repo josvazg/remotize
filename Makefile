@@ -13,7 +13,7 @@ cleandeps:
 	gomake -C goremote clean
 	gomake -C sample clean
 
-all: $(GOROOT)/src/Make.rpkg test goremote/_obj sample/_obj
+all: $(GOROOT)/src/Make.rpkg test tool/_obj goremote/_obj sample/_obj
 
 goremote/_obj:  goremote/goremote.go tool/_obj pipe/_obj
 	#cd goremote && gotest

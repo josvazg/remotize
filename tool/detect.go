@@ -125,11 +125,7 @@ func (d *Detected) Visit(n ast.Node) (w ast.Visitor) {
 // parseImports will process imports for detection on each file's source code
 func (d *Detected) parseImports(ispec *ast.ImportSpec) {
 	path := strings.Trim(ispec.Path.Value, "\"")
-	name := path
-	if strings.Contains(path, "/") {
-		parts := strings.Split(path, "/")
-		name = parts[len(parts)-1]
-	}
+	name := path2pack(path)
 	current := path
 	if ispec.Name != nil {
 		current = ispec.Name.Name
@@ -370,4 +366,13 @@ func isExported(name string) bool {
 func empty(s string) bool {
 	s = strings.Trim(s, " \t")
 	return len(s) == 0 || s == "//" || s == "*/"
+}
+
+// returns the last part of the path as the package name or the full path if it's just a single name path
+func path2pack(path string) string {
+	if strings.Contains(path, "/") {
+		parts := strings.Split(path, "/")
+		return parts[len(parts)-1]
+	}
+	return path
 }

@@ -97,7 +97,6 @@ func genWrapper(name string, spec *Spec) os.Error {
 	defer f.Close()
 	spec.buildInterfaceDef(name)
 	spec.buildHeader()
-	fmt.Fprintf(f, spec.hdr.String())
 	if e:=spec.buildBody(name); e!=nil {
 		return e
 	}
@@ -292,7 +291,7 @@ func (s *Spec) wrapMethod(ifacename string, m reflect.Method) {
 func (s *Spec) generateStructWrapper(pars []reflect.Type, structname, name string) {
 	fmt.Fprintf(s.src, "type %s_%s struct {\n", structname, name)
 	for i,par := range pars {
-		fmt.Fprintf(s.src, "\tArg%d %s,\n", i, par.Name())
+		fmt.Fprintf(s.src, "\tArg%d %s\n", i, par)
 	}
 	fmt.Fprintf(s.src, "}\n\n")
 }

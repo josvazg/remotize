@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"exec"
 	"fmt"
-	"go/ast"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -95,13 +94,18 @@ func genWrapper(name string, spec *Spec) os.Error {
 	if e != nil {
 		return e
 	}
+	defer f.Close()
 	spec.buildInterfaceDef(name)
 	spec.buildHeader()
 	fmt.Fprintf(f, spec.hdr.String())
-	if e := doremotize(spec.t, f, spec.hdr.String()+spec.src.String()); e != nil {
+	if e:=spec.buildBody(name); e!=nil {
 		return e
 	}
-	f.Close()
+	def:=""
+	if spec.isInterface {
+		def=spec.def.String()
+	}
+ 	fmt.Fprintf(f, "%s%s%s", spec.hdr.String(),def,spec.src.String())
 	return nil
 }
 
@@ -219,63 +223,7 @@ func (s *Spec) buildHeader() {
 	writeImports(s.hdr, names, s.imports, s.packname)
 }
 
-func save(filename, contents string) {
-	f, e := os.Create(filename)
-	if e != nil {
-		panic(e)
-	}
-	f.Write(([]byte)(contents))
-	f.Close()
-}
-/*
-func toPackname(t reflect.Type) string {
-	if t.Kind() == reflect.Ptr {
-		return toPackname(t.Elem())
-	}
-	path := t.PkgPath()
-	parts := strings.Split(path, "/")
-	if parts == nil && len(parts) == 1 {
-		return path
-	}
-	return parts[len(parts)-1]
-}
-
-func src2ast(src string) *ast.File {
-	//fmt.Println(src)
-	f, e := parser.ParseFile(token.NewFileSet(), "", src, 0)
-	if e != nil {
-		panic(e.String() + ":\n" + src)
-	}
-	return f
-}
-
-type remotizeCtx struct {
-	pkg string
-	w   io.Writer
-}
-
-func doremotize(t reflect.Type, w io.Writer, source string) os.Error {
-	rctx := remotizeCtx{toPackname(t), w}
-	f := src2ast(source)
-	//ast.Print(token.NewFileSet(), f)
-	rprefix := "remotize."
-	if f.Name.Name == RemotizePkg {
-		rprefix = ""
-	}
-	for _, decl := range f.Decls {
-		if gendecl, ok := decl.(*ast.GenDecl); ok {
-			for _, spec := range gendecl.Specs {
-				if ts, ok := spec.(*ast.TypeSpec); ok {
-					if it, ok := ts.Type.(*ast.InterfaceType); ok {
-						return rctx.remotizeInterface(rprefix, ts.Name.Name, it)
-					}
-				}
-			}
-		}
-	}
-	return nil
-}*/
-
+// buildBody builds the wrapper body source code
 func (s *Spec) buildBody(ifacename string) os.Error {
 	fmt.Fprintf(s.src, "// Autoregistry\n")
 	fmt.Fprintf(s.src, "func init() {\n")
@@ -297,6 +245,7 @@ func (s *Spec) buildBody(ifacename string) os.Error {
 	return nil
 }
 
+// remoteInit prepares the service header
 func (s *Spec) remoteInit(ifacename string) {
 	fmt.Fprintf(s.src, "// Rpc service wrapper for %s\n", ifacename)
 	fmt.Fprintf(s.src, "type %sService struct {\n", ifacename)
@@ -311,6 +260,7 @@ func (s *Spec) remoteInit(ifacename string) {
 	fmt.Fprintf(s.src, "}\n\n")
 }
 
+// localInit prepares the client header
 func (s *Spec) localInit(ifacename string) {
 	fmt.Fprintf(s.src, "// Rpc client for %s\n", ifacename)
 	fmt.Fprintf(s.src, "type Remote%s struct {\n", ifacename)
@@ -323,69 +273,151 @@ func (s *Spec) localInit(ifacename string) {
 	fmt.Fprintf(s.src, "}\n\n")
 }
 
+// wrapMethod generates the wrappers for one method
 func (s *Spec) wrapMethod(ifacename string, m reflect.Method) {
 	fmt.Fprintf(s.src, "// wrapper for: %s\n\n", m.Name)
-	argcnt := s.generateStructWrapper(m.Type, "Args", m.Name)
-	results, inouts := s.prepareInOuts(m.Type, fun.Results)
-	replycnt := s.generateStructWrapper(results, "Reply", m.Name)
-	s.generateServerRPCWrapper(fun, ifacename, m.Name, argcnt, replycnt, inouts)
-	s.generateClientRPCWrapper(fun, ifacename, m.Name, argcnt, replycnt, inouts)
+	args := make([]reflect.Type, 0)
+	for i:=0;i<m.Type.NumIn();i++ {
+		args=append(args,m.Type.In(i))
+	}
+	s.generateStructWrapper(args, "Args", m.Name)
+	results, inouts := s.prepareInOuts(m.Type)
+	s.generateStructWrapper(results, "Reply", m.Name)
+	s.generateServerRPCWrapper(m, ifacename, inouts)
+	s.generateClientRPCWrapper(m, ifacename, inouts)
 	fmt.Fprintf(s.src, "\n")
 }
 
-func (s *Spec) generateStructWrapper(ft reflect.Type, structname, name string) int {
+// generateStructWrapper generates a argument or result struct
+func (s *Spec) generateStructWrapper(pars []reflect.Type, structname, name string) {
 	fmt.Fprintf(s.src, "type %s_%s struct {\n", structname, name)
-	defer fmt.Fprintf(s.src, "}\n\n")
-	argn := ft.NumIn()
-	for i := 0; i < argn; i++ {
-		fmt.Fprintf(s.src, "\tArg%d %s,\n", i, ft.In(i).Name())
+	for i,par := range pars {
+		fmt.Fprintf(s.src, "\tArg%d %s,\n", i, par.Name())
 	}
-	return argn
+	fmt.Fprintf(s.src, "}\n\n")
 }
 
+// prepareInOuts detects how many pointers in the args must be returned as results (in & outs)
 func (s *Spec) prepareInOuts(ft reflect.Type) ([]reflect.Type, []int) {
-	args := make([]reflect.Type, 0)
+	results := make([]reflect.Type, 0)
 	inouts := make([]int, 0)
 	for i := 0; i < ft.NumIn(); i++ {
-		args
-		if _, ok := field.Type.(*ast.StarExpr); ok {
-			args = append(args, field)
-			inouts = append(inouts, n)
+		if ft.In(i).Kind()==reflect.Ptr {
+			results=append(results,ft.In(i))
+			inouts=append(inouts,i)
 		}
 	}
-	if results == nil {
-		results = &ast.FieldList{List: args}
-	} else {
-		results.List = append(results.List, args...)
+	for i:=0; i<ft.NumOut();i++ {
+		results=append(results,ft.Out(i))
 	}
 	return results, inouts
 }
 
-func (r *remotizeCtx) printTypeExpr(w io.Writer, e ast.Expr) {
-	ty := reflect.TypeOf(e)
-	switch t := e.(type) {
-	case *ast.StarExpr:
-		fmt.Fprintf(w, "*")
-		r.printTypeExpr(w, t.X)
-	case *ast.Ident:
-		fmt.Fprintf(w, t.Name)
-	case *ast.ArrayType:
-		fmt.Fprintf(w, "[%v]", solveName(t.Len))
-		r.printTypeExpr(w, t.Elt)
-	case *ast.SelectorExpr:
-		buf := bytes.NewBuffer(make([]byte, 0, 256))
-		r.printTypeExpr(buf, t.X)
-		prefix := buf.String()
-		if prefix != r.pkg {
-			fmt.Fprintf(w, "%s.", prefix)
+// function that is exposed to an RPC API, but calls simple "Server_" one
+func (s *Spec) generateServerRPCWrapper(m reflect.Method, ifacename string, inouts []int) {
+	name:=m.Name
+	ins:=m.Type.NumIn()
+	outs:=m.Type.NumOut()
+	fmt.Fprintf(s.src, "func (r *%sService) %s(args *Args_%s, "+
+		"reply *Reply_%s) os.Error {\n", ifacename, name, name, name)
+	fmt.Fprintf(s.src, "\t")
+	replies := outs - len(inouts)
+	for i := 0; i < replies; i++ {
+		fmt.Fprintf(s.src, "reply.Arg%d", i)
+		if i != replies-1 {
+			fmt.Fprintf(s.src, ", ")
 		}
-		fmt.Fprintf(w, "%s", t.Sel.Name)
-	case *ast.FuncType:
+	}
+	if replies > 0 {
+		fmt.Fprintf(s.src, " = ")
+	}
+	fmt.Fprintf(s.src, "r.srv.%s(", name)
+	for i := 0; i < ins; i++ {
+		fmt.Fprintf(s.src, "args.Arg%d", i)
+		if i != ins-1 {
+			fmt.Fprintf(s.src, ", ")
+		}
+	}
+	fmt.Fprintf(s.src, ")\n")
+	for i := replies; i < outs; i++ {
+		fmt.Fprintf(s.src, "\treply.Arg%d=args.Arg%d\n", i, inouts[i-replies])
+	}
+	fmt.Fprintf(s.src, "\treturn nil\n}\n\n")
+}
+
+// generateClientRPCWrapper generates the client side wrapper
+func (s *Spec) generateClientRPCWrapper(m reflect.Method, ifacename string, inouts []int) {
+	name:=m.Name
+	ins:=m.Type.NumIn()
+	outs:=m.Type.NumOut()
+	fmt.Fprintf(s.src, "func (l *Remote%s) %s(", ifacename, name)
+	s.printFuncFieldListUsingArgs(m.Type)
+	fmt.Fprintf(s.src, ")")
+
+	buf := bytes.NewBuffer(make([]byte, 0, 256))
+	nresults := s.printFuncFieldList(buf, m.Type)
+	if nresults > 0 {
+		results := buf.String()
+		if strings.Index(results, " ") != -1 {
+			results = "(" + results + ")"
+		}
+		fmt.Fprintf(s.src, " %s", results)
+	}
+	fmt.Fprintf(s.src, " {\n")
+	fmt.Fprintf(s.src, "\tvar args Args_%s\n", name)
+	fmt.Fprintf(s.src, "\tvar reply Reply_%s\n", name)
+	for i := 0; i < ins; i++ {
+		fmt.Fprintf(s.src, "\targs.Arg%d = Arg%d\n", i, i)
+	}
+	fmt.Fprintf(s.src, "\terr := l.cli.Call(\"%sService.%s\", &args, &reply)\n",
+		ifacename, name)
+	fmt.Fprintf(s.src, "\tif err != nil {\n")
+	fmt.Fprintf(s.src, "\t\tpanic(err.String())\n\t}\n")
+
+	replies := outs - len(inouts)
+	for i := replies; i < outs; i++ {
+		fmt.Fprintf(s.src, "\t*reply.Arg%d=*args.Arg%d\n", i, inouts[i-replies])
+	}
+	fmt.Fprintf(s.src, "\treturn ")
+	for i := 0; i < outs; i++ {
+		fmt.Fprintf(s.src, "reply.Arg%d", i)
+		if i != outs-1 {
+			fmt.Fprintf(s.src, ", ")
+		}
+	}
+	fmt.Fprintf(s.src, "\n}\n\n")
+}
+
+// printFuncFieldListUsingArgs generates the func field list with argX names
+func (s *Spec) printFuncFieldListUsingArgs(t reflect.Type) {
+	for i:=0;i<t.NumIn();i++ {
+		// names
+		fmt.Fprintf(s.src,"Arg%d ",i)
+		s.printTypeExpr(s.src, t.In(i))
+		// ,
+		if i != t.NumIn()-1 {
+			fmt.Fprintf(s.src, ", ")
+		} else if t.IsVariadic() {
+			fmt.Fprintf(s.src, ", ...")
+		}
+	}
+}
+
+// printTypeExpr prints a type expression
+func (s *Spec) printTypeExpr(w io.Writer, t reflect.Type) {
+	switch t.Kind() {
+	case reflect.Ptr:
+		fmt.Fprintf(w, "*")
+		s.printTypeExpr(w, t.Elem())
+	case reflect.Array:
+		fmt.Fprintf(w, "[%v]", t.Len())
+		s.printTypeExpr(w, t.Elem())
+	case reflect.Func:
 		fmt.Fprintf(w, "func(")
-		r.printFuncFieldList(w, t.Params)
+		s.printFuncFieldList(w, t)
 		fmt.Fprintf(w, ")")
 		buf := bytes.NewBuffer(make([]byte, 0, 512))
-		nresults := r.printFuncFieldList(buf, t.Results)
+		nresults := s.printFuncFieldList(buf, t)
 		if nresults > 0 {
 			results := buf.String()
 			if strings.Index(results, " ") != -1 {
@@ -393,154 +425,32 @@ func (r *remotizeCtx) printTypeExpr(w io.Writer, e ast.Expr) {
 			}
 			fmt.Fprintf(w, " %s", results)
 		}
-	case *ast.MapType:
+	case reflect.Map:
 		fmt.Fprintf(w, "map[")
-		r.printTypeExpr(w, t.Key)
+		s.printTypeExpr(w, t.Key())
 		fmt.Fprintf(w, "]")
-		r.printTypeExpr(w, t.Value)
-	case *ast.InterfaceType:
+		s.printTypeExpr(w, t.Elem())
+	case reflect.Interface:
 		fmt.Fprintf(w, "interface{}")
-	case *ast.Ellipsis:
-		fmt.Fprintf(w, "...")
-		r.printTypeExpr(w, t.Elt)
 	default:
-		fmt.Fprintf(w, "\n[!!] unknown type: %s\n", ty.String())
+		fmt.Fprintf(w,"%v",t)
 	}
 }
 
-func (r *remotizeCtx) printFuncFieldList(w io.Writer,
-f *ast.FieldList) int {
-	count := 0
-	if f == nil {
-		return count
-	}
-	for i, field := range f.List {
+// printFuncFieldList generates the func field list with type names
+func (s *Spec) printFuncFieldList(w io.Writer, t reflect.Type) int {
+	for i:=0;i<t.NumIn();i++ {
 		// names
-		if field.Names != nil {
-			for j, name := range field.Names {
-				fmt.Fprintf(w, "%s", name.Name)
-				if j != len(field.Names)-1 {
-					fmt.Fprintf(w, ", ")
-				}
-				count++
-			}
-			fmt.Fprintf(w, " ")
-		} else {
-			count++
-		}
-
-		// type
-		r.printTypeExpr(w, field.Type)
-
+		fmt.Fprintf(s.src,"%s ",t.In(i).Name())
+		s.printTypeExpr(s.src,t.In(i))
 		// ,
-		if i != len(f.List)-1 {
-			fmt.Fprintf(w, ", ")
+		if i != t.NumIn()-1 {
+			fmt.Fprintf(s.src, ", ")
+		} else if t.IsVariadic() {
+			fmt.Fprintf(s.src, ", ...")
 		}
 	}
-	return count
-}
-
-// function that is valeing exposed to an RPC API, but calls simple "Server_" one
-func (r *remotizeCtx) generateServerRPCWrapper(fun *ast.FuncType,
-iface, name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(r.w, "func (r *%sService) %s(args *Args_%s, "+
-		"reply *Reply_%s) os.Error {\n", iface, name, name, name)
-
-	fmt.Fprintf(r.w, "\t")
-	replies := replycnt - len(inouts)
-	for i := 0; i < replies; i++ {
-		fmt.Fprintf(r.w, "reply.Arg%d", i)
-		if i != replies-1 {
-			fmt.Fprintf(r.w, ", ")
-		}
-	}
-	if replies > 0 {
-		fmt.Fprintf(r.w, " = ")
-	}
-	fmt.Fprintf(r.w, "r.srv.%s(", name)
-	for i := 0; i < argcnt; i++ {
-		fmt.Fprintf(r.w, "args.Arg%d", i)
-		if i != argcnt-1 {
-			fmt.Fprintf(r.w, ", ")
-		}
-	}
-	fmt.Fprintf(r.w, ")\n")
-	for i := replies; i < replycnt; i++ {
-		fmt.Fprintf(r.w, "\treply.Arg%d=args.Arg%d\n", i, inouts[i-replies])
-	}
-	fmt.Fprintf(r.w, "\treturn nil\n}\n\n")
-}
-
-func (r *remotizeCtx) generateClientRPCWrapper(fun *ast.FuncType, iface,
-name string, argcnt, replycnt int, inouts []int) {
-	fmt.Fprintf(r.w, "func (l *Remote%s) %s(", iface, name)
-	r.printFuncFieldListUsingArgs(fun.Params)
-	fmt.Fprintf(r.w, ")")
-
-	buf := bytes.NewBuffer(make([]byte, 0, 256))
-	nresults := r.printFuncFieldList(buf, fun.Results)
-	if nresults > 0 {
-		results := buf.String()
-		if strings.Index(results, " ") != -1 {
-			results = "(" + results + ")"
-		}
-		fmt.Fprintf(r.w, " %s", results)
-	}
-	fmt.Fprintf(r.w, " {\n")
-	fmt.Fprintf(r.w, "\tvar args Args_%s\n", name)
-	fmt.Fprintf(r.w, "\tvar reply Reply_%s\n", name)
-	for i := 0; i < argcnt; i++ {
-		fmt.Fprintf(r.w, "\targs.Arg%d = Arg%d\n", i, i)
-	}
-	fmt.Fprintf(r.w, "\terr := l.cli.Call(\"%sService.%s\", &args, &reply)\n",
-		iface, name)
-	fmt.Fprintf(r.w, "\tif err != nil {\n")
-	fmt.Fprintf(r.w, "\t\tpanic(err.String())\n\t}\n")
-
-	replies := replycnt - len(inouts)
-	for i := replies; i < replycnt; i++ {
-		fmt.Fprintf(r.w, "\t*reply.Arg%d=*args.Arg%d\n", i, inouts[i-replies])
-	}
-	fmt.Fprintf(r.w, "\treturn ")
-	for i := 0; i < replycnt; i++ {
-		fmt.Fprintf(r.w, "reply.Arg%d", i)
-		if i != replycnt-1 {
-			fmt.Fprintf(r.w, ", ")
-		}
-	}
-	fmt.Fprintf(r.w, "\n}\n\n")
-}
-
-func (r *remotizeCtx) printFuncFieldListUsingArgs(f *ast.FieldList) int {
-	count := 0
-	if f == nil {
-		return count
-	}
-	for i, field := range f.List {
-		// names
-		if field.Names != nil {
-			for j, _ := range field.Names {
-				fmt.Fprintf(r.w, "Arg%d", count)
-				if j != len(field.Names)-1 {
-					fmt.Fprintf(r.w, ", ")
-				}
-				count++
-			}
-			fmt.Fprintf(r.w, " ")
-		} else {
-			fmt.Fprintf(r.w, "Arg%d ", count)
-			count++
-		}
-
-		// type
-		r.printTypeExpr(r.w, field.Type)
-
-		// ,
-		if i != len(f.List)-1 {
-			fmt.Fprintf(r.w, ", ")
-		}
-	}
-	return count
+	return t.NumIn()
 }
 
 // suppress will remove the ocurrences of sups strings from s 
@@ -551,19 +461,6 @@ func suppress(s string, sups ...string) string {
 	}
 	return s
 }
-
-// fixPack will fix the package name to be present and without alias
-/*func (d *Detected) fixPack(name string) string {
-	if !strings.Contains(name, ".") {
-		return d.currpack + "." + name
-	}
-	parts := strings.Split(name, ".")
-	alias := d.aliases[parts[0]]
-	if alias == "" {
-		return name
-	}
-	return alias + "." + parts[1]
-}*/
 
 // generateRemotizerCode returns the remotizer source code for a given set of Detected remotizables
 func generateRemotizerCode(d *Detected) string {
@@ -657,7 +554,7 @@ func writeAndFormatSource(filename, source string) os.Error {
 // build generates a program to remotize the detected interfaces
 func buildRemotizer(d *Detected) os.Error {
 	src := generateRemotizerCode(d)
-	fmt.Println("buildRemotizer:", src, "******* DONE buildRemotizer")
+	fmt.Println("buildRemotizer:\n", src)
 	filename := "_remotizer"
 	if e := writeAndFormatSource(filename, src); e != nil {
 		return e
@@ -677,7 +574,16 @@ func buildRemotizer(d *Detected) os.Error {
 	}
 	return nil
 }
-
+/*
+func save(filename, contents string) {
+	f, e := os.Create(filename)
+	if e != nil {
+		panic(e)
+	}
+	f.Write(([]byte)(contents))
+	f.Close()
+}
+*/
 // runs a command
 func RunCmd(cmdargs ...string) ([]byte, os.Error) {
 	fmt.Println(cmdargs)

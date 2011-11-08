@@ -97,11 +97,9 @@ func genWrapper(name string, spec *Spec) os.Error {
 	defer f.Close()
 	spec.buildInterfaceDef(name)
 	spec.buildHeader()
-	if e:=spec.buildBody(name); e!=nil {
-		return e
-	}
+	spec.buildBody(name)
 	def:=""
-	if spec.isInterface {
+	if !spec.isInterface {
 		def=spec.def.String()
 	}
  	fmt.Fprintf(f, "%s%s%s", spec.hdr.String(),def,spec.src.String())
@@ -189,7 +187,11 @@ func (s *Spec) typesource(w io.Writer, t reflect.Type) {
 		fmt.Fprintf(w, "string")
 	default:
 		s.pack(t)
-		fmt.Fprintf(w, t.String())
+		name:=t.String()
+		if t.PkgPath()==s.packname {
+			name=t.Name()
+		}
+		fmt.Fprintf(w, name)
 		return
 	}
 }
@@ -223,7 +225,7 @@ func (s *Spec) buildHeader() {
 }
 
 // buildBody builds the wrapper body source code
-func (s *Spec) buildBody(ifacename string) os.Error {
+func (s *Spec) buildBody(ifacename string) {
 	fmt.Fprintf(s.src, "// Autoregistry\n")
 	fmt.Fprintf(s.src, "func init() {\n")
 	fmt.Fprintf(s.src, "    remotize.Register(Remote%s{},\n", ifacename)
@@ -240,8 +242,6 @@ func (s *Spec) buildBody(ifacename string) os.Error {
 	for i := 0; i < s.t.NumMethod(); i++ {
 		s.wrapMethod(ifacename, s.t.Method(i))
 	}
-	//fmt.Println(r.w.String())
-	return nil
 }
 
 // remoteInit prepares the service header
@@ -291,7 +291,9 @@ func (s *Spec) wrapMethod(ifacename string, m reflect.Method) {
 func (s *Spec) generateStructWrapper(pars []reflect.Type, structname, name string) {
 	fmt.Fprintf(s.src, "type %s_%s struct {\n", structname, name)
 	for i,par := range pars {
-		fmt.Fprintf(s.src, "\tArg%d %s\n", i, par)
+		fmt.Fprintf(s.src, "\tArg%d ", i)
+		s.typesource(s.src,par)
+		fmt.Fprintf(s.src, "\n")
 	}
 	fmt.Fprintf(s.src, "}\n\n")
 }
@@ -351,18 +353,9 @@ func (s *Spec) generateClientRPCWrapper(m reflect.Method, ifacename string, inou
 	outs:=m.Type.NumOut()
 	fmt.Fprintf(s.src, "func (l *Remote%s) %s(", ifacename, name)
 	s.printFuncFieldListUsingArgs(m.Type)
-	fmt.Fprintf(s.src, ")")
-
-	buf := bytes.NewBuffer(make([]byte, 0, 256))
-	nresults := s.printFuncFieldList(buf, m.Type)
-	if nresults > 0 {
-		results := buf.String()
-		if strings.Index(results, " ") != -1 {
-			results = "(" + results + ")"
-		}
-		fmt.Fprintf(s.src, " %s", results)
-	}
-	fmt.Fprintf(s.src, " {\n")
+	fmt.Fprintf(s.src, ") ")
+	s.printFuncResultList(m.Type)
+	fmt.Fprintf(s.src, "{\n")
 	fmt.Fprintf(s.src, "\tvar args Args_%s\n", name)
 	fmt.Fprintf(s.src, "\tvar reply Reply_%s\n", name)
 	for i := 0; i < ins; i++ {
@@ -389,67 +382,39 @@ func (s *Spec) generateClientRPCWrapper(m reflect.Method, ifacename string, inou
 
 // printFuncFieldListUsingArgs generates the func field list with argX names
 func (s *Spec) printFuncFieldListUsingArgs(t reflect.Type) {
+	if t.IsVariadic() {
+		panic(fmt.Sprintf("Variadic argument lists as in '%v' are not supported!",t))
+	}
 	for i:=0;i<t.NumIn();i++ {
 		// names
 		fmt.Fprintf(s.src,"Arg%d ",i)
-		s.printTypeExpr(s.src, t.In(i))
+		s.typesource(s.src, t.In(i))
 		// ,
 		if i != t.NumIn()-1 {
 			fmt.Fprintf(s.src, ", ")
-		} else if t.IsVariadic() {
-			fmt.Fprintf(s.src, ", ...")
 		}
 	}
 }
 
-// printTypeExpr prints a type expression
-func (s *Spec) printTypeExpr(w io.Writer, t reflect.Type) {
-	switch t.Kind() {
-	case reflect.Ptr:
-		fmt.Fprintf(w, "*")
-		s.printTypeExpr(w, t.Elem())
-	case reflect.Array:
-		fmt.Fprintf(w, "[%v]", t.Len())
-		s.printTypeExpr(w, t.Elem())
-	case reflect.Func:
-		fmt.Fprintf(w, "func(")
-		s.printFuncFieldList(w, t)
-		fmt.Fprintf(w, ")")
-		buf := bytes.NewBuffer(make([]byte, 0, 512))
-		nresults := s.printFuncFieldList(buf, t)
-		if nresults > 0 {
-			results := buf.String()
-			if strings.Index(results, " ") != -1 {
-				results = "(" + results + ")"
-			}
-			fmt.Fprintf(w, " %s", results)
-		}
-	case reflect.Map:
-		fmt.Fprintf(w, "map[")
-		s.printTypeExpr(w, t.Key())
-		fmt.Fprintf(w, "]")
-		s.printTypeExpr(w, t.Elem())
-	case reflect.Interface:
-		fmt.Fprintf(w, "interface{}")
-	default:
-		fmt.Fprintf(w,"%v",t)
+// printFuncResultList generates the func field list with type names
+func (s *Spec) printFuncResultList(t reflect.Type) {
+	outs:=t.NumOut()
+	if outs>1 {
+		fmt.Fprintf(s.src, "(")
 	}
-}
-
-// printFuncFieldList generates the func field list with type names
-func (s *Spec) printFuncFieldList(w io.Writer, t reflect.Type) int {
-	for i:=0;i<t.NumIn();i++ {
+	for i:=0;i<outs;i++ {
 		// names
-		fmt.Fprintf(s.src,"%s ",t.In(i).Name())
-		s.printTypeExpr(s.src,t.In(i))
+		s.typesource(s.src,t.Out(i))
 		// ,
-		if i != t.NumIn()-1 {
+		if i != outs-1 {
 			fmt.Fprintf(s.src, ", ")
-		} else if t.IsVariadic() {
-			fmt.Fprintf(s.src, ", ...")
 		}
 	}
-	return t.NumIn()
+	if outs>1 {
+		fmt.Fprintf(s.src, ") ")
+	} else {
+		fmt.Fprintf(s.src, " ")
+	}
 }
 
 // suppress will remove the ocurrences of sups strings from s 

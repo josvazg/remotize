@@ -376,3 +376,22 @@ func path2pack(path string) string {
 	}
 	return path
 }
+
+// writeAndFormatSource writes the go source to a file properly formatted
+func writeAndFormatSource(filename, source string) os.Error {
+	fset := token.NewFileSet()
+	f, e := parser.ParseFile(fset, filename+".go", source, parser.ParseComments)
+	if e != nil {
+		fmt.Println(source)
+		return e
+	}
+	fos, e := os.Create(filename + ".go")
+	if e != nil {
+		return e
+	}
+	pcfg := &printer.Config{printer.TabIndent, 2}
+	pcfg.Fprint(fos, fset, f)
+	fos.Close()
+	_, e = os.Stat(filename + ".go")
+	return e
+}

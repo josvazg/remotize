@@ -147,9 +147,11 @@ func Suffix(name string) string {
 func EndsWithVowel(str string) bool {
 	vowels := []string{"a", "e", "i", "o", "u"}
 	for _, v := range vowels {
-		if str[len(str)-len(v):] == v {
+		fmt.Println(str,"v=",v)
+		if strings.HasSuffix(str, v) {
 			return true
 		}
 	}
 	return false
 }
+

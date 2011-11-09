@@ -55,28 +55,26 @@ type Detected struct {
 */
 func Autoremotize(files ...string) (int, os.Error) {
 	done := 0
-	d, e := detect(files...)
+	d, e := Detect(files...)
 	if e != nil {
-		fmt.Println("e:", e)
 		return 0, e
 	}
-	fmt.Println("Detected:", d)
 	items := len(d.RDecls) + len(d.RTypes)
 	if items == 0 {
 		fmt.Println("No 'remotizables' found")
 		return done, nil
 	}
-	fmt.Printf("Found %v interfaces/types to remotize:\n", items)
+	fmt.Printf("Found %v interfaces/types to remotize\n", items)
 	e = buildRemotizer(d)
 	if e != nil {
-		fmt.Println("Error:", e)
+		return 0, e
 	}
 	return done, nil
 }
 
-// detect will process go source files to detect interfaces or type 
+// Detect will process go source files to detect interfaces or type 
 // to be remotized
-func detect(files ...string) (*Detected, os.Error) {
+func Detect(files ...string) (*Detected, os.Error) {
 	d := &Detected{}
 	d.aliases = make(map[string]string)
 	d.methods = make(map[string][]*ast.FuncDecl)
@@ -158,11 +156,9 @@ func (d *Detected) parseComment(decl *ast.GenDecl) {
 		c := string(cmt.Text)
 		if strings.Contains(strings.ToLower(c), "(remotize)") {
 			if it, ok := tspec.Type.(*ast.InterfaceType); ok {
-				fmt.Println("Confirmed Interface from comments:", name)
 				d.interfaces[name] = it
 				d.markType(name)
 			} else {
-				fmt.Println("Confirmed Type from comments: (*)", name)
 				d.markType(name)
 			}
 		}
@@ -194,7 +190,6 @@ func (d *Detected) parseCalls(call *ast.CallExpr) {
 		if startsWith(called, "*") {
 			called = called[1:]
 		}
-		fmt.Println("Confirmed Type or Interface from calls:", called)
 		d.mark(called)
 	}
 }
@@ -205,7 +200,6 @@ func (d *Detected) recordInterfaces(tspec *ast.TypeSpec) {
 	if it, ok := tspec.Type.(*ast.InterfaceType); ok {
 		name := solveName(tspec.Name)
 		if _, ok := d.interfaces[name]; !ok {
-			fmt.Println("Recorded interface:", name)
 			d.interfaces[name] = it
 		}
 	}
@@ -224,7 +218,6 @@ func (d *Detected) recordMethods(fdecl *ast.FuncDecl) {
 	}
 	ml = append(ml, fdecl)
 	d.methods[recv] = ml
-	fmt.Println("Recorded method for", recv, ":", *fdecl)
 }
 
 // markType marks an incomplete type by name. If it contains a package name
@@ -263,7 +256,7 @@ func postProcess(d *Detected) {
 			fmt.Fprintf(dcl.Src, "\ntype %s interface {", ifacename(name))
 			fmt.Fprintf(dcl.Src, "%s", methods)
 			fmt.Fprintf(dcl.Src, "\n}\n")
-			dcl.isInterface=false
+			dcl.isInterface = false
 		} else if it := d.interfaces[name]; it != nil { // is a interface declaration
 			ast.Walk(dcl, it) // -> call dcl.Visit
 			dcl.Src = bytes.NewBufferString("")
@@ -272,13 +265,12 @@ func postProcess(d *Detected) {
 			fmt.Fprintf(dcl.Src, "type %s ", name)
 			printer.Fprint(dcl.Src, token.NewFileSet(), it)
 			fmt.Fprintf(dcl.Src, "\n")
-			dcl.isInterface=true
+			dcl.isInterface = true
 		}
 		if dcl.Src == nil {
 			d.RDecls[name] = nil, false
 		}
 	}
-	fmt.Println("d.RDecls=", d.RDecls)
 }
 
 // Visit parses a candidate interface source code
@@ -377,8 +369,8 @@ func path2pack(path string) string {
 	return path
 }
 
-// writeAndFormatSource writes the go source to a file properly formatted
-func writeAndFormatSource(filename, source string) os.Error {
+// gofmtSave saves the go source to a file properly formatted
+func gofmtSave(filename, source string) os.Error {
 	fset := token.NewFileSet()
 	f, e := parser.ParseFile(fset, filename+".go", source, parser.ParseComments)
 	if e != nil {

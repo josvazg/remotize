@@ -16,9 +16,10 @@ func dieOnError(t *test.T, e os.Error) {
 }
 
 func fireUpCalcerServer(t *test.T) string {
-	server := rpc.NewServer()
 	// You can access the remotized code directly, it should be created by now...
-	NewCalcerService(server,new(Calc))
+	r:=NewCalcerService(new(Calc))
+	rpc.Register(r)
+	rpc.HandleHTTP()
 	addr:=":1234"
 	l, e := net.Listen("tcp", addr)
 	dieOnError(t,e)

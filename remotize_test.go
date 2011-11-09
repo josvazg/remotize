@@ -22,7 +22,7 @@ func BuildRemoteSometyper(*rpc.Client) interface{} {
 	return &RemoteSometyper{}
 }
 
-func BuildSometyperService(*rpc.Server, interface{}) interface{} {
+func BuildSometyperService(interface{}) interface{} {
 	return &SometyperService{}
 }
 
@@ -39,7 +39,7 @@ func checkType(t *testing.T, typename string, i interface{}) {
 func TestRegistry(t *testing.T) {
 	Register(RemoteSometyper{}, BuildRemoteSometyper,
 		SometyperService{}, BuildSometyperService)
-	s := NewService(rpc.NewServer(), new(Sometyper))
+	s := NewService(new(Sometyper))
 	checkType(t, "SometyperService", s)
 	r := NewRemote(nil, new(Sometyper))
 	checkType(t, "RemoteSometyper", r)

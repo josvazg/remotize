@@ -15,6 +15,7 @@ type SomeStruct struct {
 }
 
 type ToolTester interface {
+	SomeOp(*int, int)
 	Integers(int, int8, int16, int32, int16, int64) (int, int8,
 	int16, int32, int16, int64)
 	Unsigned(uint, uint8, uint16, uint32, uint16, uint64) (uint, uint8, uint16,

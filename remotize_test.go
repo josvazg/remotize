@@ -18,14 +18,6 @@ type SometyperService struct {
 
 }
 
-func BuildRemoteSometyper(*rpc.Client) interface{} {
-	return &RemoteSometyper{}
-}
-
-func BuildSometyperService(interface{}) interface{} {
-	return &SometyperService{}
-}
-
 func checkType(t *testing.T, typename string, i interface{}) {
 	if i == nil {
 		t.Fatal("Could not retrieve " + typename + "!")
@@ -37,8 +29,14 @@ func checkType(t *testing.T, typename string, i interface{}) {
 }
 
 func TestRegistry(t *testing.T) {
-	Register(RemoteSometyper{}, BuildRemoteSometyper,
-		SometyperService{}, BuildSometyperService)
+	Register(RemoteSometyper{}, 
+		func (*rpc.Client) interface{} {
+			return &RemoteSometyper{}
+		},
+		SometyperService{}, 
+		func (interface{}) interface{} {
+			return &SometyperService{}
+		})
 	s := NewService(new(Sometyper))
 	checkType(t, "SometyperService", s)
 	r := NewRemote(nil, new(Sometyper))

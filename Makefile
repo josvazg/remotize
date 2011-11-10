@@ -8,26 +8,28 @@ include $(GOROOT)/src/Make.pkg
 clean: cleandeps
 
 cleandeps:
-	gomake -C pipe clean
 	gomake -C tool clean
 	gomake -C goremote clean
+	gomake -C sample/dep clean
 	gomake -C sample clean
 
-all: $(GOROOT)/src/Make.rpkg test tool/_obj goremote/_obj sample/_obj
+all: $(GOROOT)/src/Make.rpkg test sample/_obj
 
-goremote/_obj:  goremote/goremote.go tool/_obj pipe/_obj
-	#cd goremote && gotest
-	gomake -C goremote install
+$(GOROOT)/src/Make.rpkg: tool/Make.rpkg
+	cp tool/Make.rpkg $(GOROOT)/src/Make.rpkg
 
 tool/_obj: _obj tool/gen.go tool/detect.go tool/tool_test.go
 	gomake -C tool test install
 	rm tool/remotized*.go
 
-pipe/_obj: pipe/pipe.go
-	gomake -C pipe install
+goremote/_obj:  goremote/goremote.go tool/_obj
+	#cd goremote && gotest
+	gomake -C goremote install
 
-sample/_obj: sample/sample.go sample/sample_test.go
+sample/dep/_obj: sample/dep/dep.go
+	gomake -C sample/dep
+
+sample/_obj: sample/dep/_obj goremote/_obj sample/sample.go sample/sample_test.go
 	gomake -C sample test
 
-$(GOROOT)/src/Make.rpkg: tool/Make.rpkg
-	cp tool/Make.rpkg $(GOROOT)/src/Make.rpkg
+

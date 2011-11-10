@@ -3,6 +3,7 @@ package sample
 import (
 	"fmt"
 	"github.com/josvazg/remotize"
+	"sample/dep"
 	"io"
 	"math"
 	"os"
@@ -13,6 +14,8 @@ import (
 func init() {
 	// This marks URLStore as remotizable
 	remotize.Please(new(URLStore))
+	remotize.Please(new(NS))
+	remotize.Please(new(BlobServer))
 }
 
 // Some type without interface

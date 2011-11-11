@@ -1,10 +1,8 @@
 package sample
 
 import (
-	"fmt"
 	"github.com/josvazg/remotize"
 	"sample/dep"
-	"io"
 	"math"
 	"os"
 	"strconv"
@@ -86,14 +84,8 @@ func (c *Calc) Pi() float64 {
 }
 
 func (c *Calc) Randomize() {
-	fmt.Println("Randomized!")
 }
 
 func (c *Calc) RandomizeSeed(seed float64) {
-	fmt.Println(seed, "randomized!")
-}
-
-func (c *Calc) Connect(r io.Reader) io.Writer {
-	return nil
 }
 

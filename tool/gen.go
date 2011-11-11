@@ -365,7 +365,7 @@ func (s *Spec) generateClientRPCWrapper(w io.Writer, m reflect.Method, inouts []
 	fmt.Fprintf(w, "\tif err != nil {\n")
 	fmt.Fprintf(w, "\t\tpanic(err.String())\n\t}\n")
 	for i := outs; i < len(inouts); i++ {
-		fmt.Fprintf(w, "\t*reply.Arg%d=*args.Arg%d\n", i, inouts[i-outs])
+		fmt.Fprintf(w, "\t*Arg%d=*reply.Arg%d\n", i, inouts[i-outs])
 	}
 	fmt.Fprintf(w, "\treturn ")
 	for i := 0; i < outs; i++ {

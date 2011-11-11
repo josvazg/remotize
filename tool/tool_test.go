@@ -52,7 +52,7 @@ type ToolTester interface {
 }
 
 func TestTool(t *testing.T) {
-	if e := Remotize(new(ToolTester)); e != nil {
+	if e := Remotize(Value2Spec("github.com/josvazg/remotize/tool",new(ToolTester))); e != nil {
 		t.Fatal(e)
 	}
 	dir, e := build.ScanDir(".", false)

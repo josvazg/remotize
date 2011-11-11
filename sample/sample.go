@@ -14,8 +14,8 @@ import (
 func init() {
 	// This marks URLStore as remotizable
 	remotize.Please(new(URLStore))
-	remotize.Please(new(NS))
-	remotize.Please(new(BlobServer))
+	remotize.Please(new(dep.NS))
+	remotize.Please(new(dep.BlobServer))
 }
 
 // Some type without interface

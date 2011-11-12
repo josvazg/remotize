@@ -232,7 +232,10 @@ func (s *Spec) buildBody() string {
 	s.remoteInit(src)
 	s.localInit(src)
 	for i := 0; i < s.t.NumMethod(); i++ {
-		s.wrapMethod(src, s.t.Method(i))
+		m:=s.t.Method(i)
+		if isExported(m.Name) {
+			s.wrapMethod(src, m)			
+		}
 	}
 	return src.String()
 }

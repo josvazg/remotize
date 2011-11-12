@@ -2,7 +2,7 @@ package sample
 
 import (
 	"github.com/josvazg/remotize"
-	"sample/dep"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -12,8 +12,10 @@ import (
 func init() {
 	// This marks URLStore as remotizable
 	remotize.Please(new(URLStore))
-	remotize.Please(new(dep.NS))
-	remotize.Please(new(dep.BlobServer))
+    // This marks a type (os.File) defined on a another package (os)
+	remotize.Please(new(os.File))
+	// This marks an interface (io.ReadWritCloser) defined on another package (io)
+	remotize.Please(new(io.ReadWriteCloser))
 }
 
 // Some type without interface

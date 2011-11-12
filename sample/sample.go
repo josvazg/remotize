@@ -22,6 +22,10 @@ type URLStore struct {
 	mutex sync.Mutex
 }
 
+func NewURLStore() *URLStore {
+	return &URLStore{store:make(map[string]string)}
+}
+
 func (s *URLStore) Get(key string) string {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

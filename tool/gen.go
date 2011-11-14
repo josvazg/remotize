@@ -69,7 +69,6 @@ func Type2Spec(pack string, t reflect.Type) *Spec {
 // Remotize remotizes a type, interface or source code specified in a Spec by generating
 // the correct wrapper for that type
 func Remotize(spec *Spec) os.Error {
-	fmt.Println("Remotize: spec=", spec)
 	if spec.name == "" {
 		return os.NewError(fmt.Sprintf("Can't remotize unnamed interface from ", spec))
 	}
@@ -202,7 +201,7 @@ func (s *Spec) buildHeader() string {
 	s.imports["rpc"] = "rpc"
 	s.imports["os"] = "os"
 	typepack := baseType(s.t).PkgPath()
-	if s.packname != typepack && typepack != "main" && s.t.Kind()==reflect.Interface {
+	if s.packname != typepack && typepack != "main" && s.t.Kind() == reflect.Interface {
 		s.imports[typepack] = typepack
 	}
 	if s.packname != RemotizePkg {
@@ -232,9 +231,9 @@ func (s *Spec) buildBody() string {
 	s.remoteInit(src)
 	s.localInit(src)
 	for i := 0; i < s.t.NumMethod(); i++ {
-		m:=s.t.Method(i)
+		m := s.t.Method(i)
 		if isExported(m.Name) {
-			s.wrapMethod(src, m)			
+			s.wrapMethod(src, m)
 		}
 	}
 	return src.String()
@@ -479,7 +478,6 @@ func writeImports(w io.Writer, imports []string, aliases map[string]string, skip
 	for _, s := range imports {
 		v := aliases[s]
 		if v == skip || v == "" {
-			fmt.Println("skip")
 			continue
 		}
 		if s == v || strings.HasSuffix(v, "/"+s) {
@@ -550,3 +548,4 @@ func Golink() string {
 func Goext() string {
 	return Goexec("")
 }
+

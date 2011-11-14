@@ -12,7 +12,7 @@ cleandeps:
 	gomake -C goremote clean
 	gomake -C sample clean
 
-all: $(GOROOT)/src/Make.rpkg test sample/_obj
+all: $(GOROOT)/src/Make.rpkg _obj test sample/_obj
 
 $(GOROOT)/src/Make.rpkg: tool/Make.rpkg
 	cp tool/Make.rpkg $(GOROOT)/src/Make.rpkg
@@ -21,7 +21,7 @@ tool/_obj: _obj tool/gen.go tool/detect.go tool/tool_test.go
 	gomake -C tool test install
 	rm tool/remotized*.go
 
-goremote/_obj:  goremote/goremote.go tool/_obj
+goremote/_obj:  tool/_obj goremote/goremote.go 
 	#cd goremote && gotest
 	gomake -C goremote install
 

@@ -55,7 +55,7 @@ TARG=...
 GOFILES=...go
 
 #include $(GOROOT)/src/Make.pkg
-include $(GOROOT)/src/Make.prepkg
+include $(GOROOT)/src/Make.rpkg
 
 Changing the last included make file will make sure that BEFORE your code is ever compiled, the goremote command will be called on your go source code files and it will detect that you want to use the URLSore type remotely. Then it will create a custom go program to remotize URLStore and that program will be run and generate a go file called remotizedURLStorer.go that will be compiled with the rest of your package go sources. This go source file will provide you with:
 

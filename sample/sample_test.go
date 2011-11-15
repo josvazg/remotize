@@ -1,17 +1,19 @@
 package sample
 
 import (
-	"http"
-	"net"
 	"os"
-	"github.com/josvazg/remotize"
-	"rpc"
 	test "testing"
 )
 
 func dieOnError(t *test.T, e os.Error) {
 	if e != nil {
 		t.Fatalf("listen error: %v", e)
+	}
+}
+
+func check(t *test.T, i interface{}, ok bool) {
+	if !ok {
+		t.Fatalf("Error in ", i)
 	}
 }
 
@@ -42,34 +44,12 @@ var calcTests = []struct {
 	{RandomizeSeed, []float64{7234643.21432}},
 }
 
-func startCalcerServer(t *test.T) string {
-	// You can access the remotized code directly, it should be created by now...
-	r := NewCalcerService(new(Calc))
-	rpc.Register(r)
-	rpc.HandleHTTP()
-	addr := ":1234"
-	l, e := net.Listen("tcp", addr)
-	dieOnError(t, e)
-	go http.Serve(l, nil)
-	return "localhost" + addr
-}
-
-func getRemoteCalcerRef(t *test.T, saddr string) Calcer {
-	client, e := rpc.DialHTTP("tcp", saddr)
-	dieOnError(t, e)
-	return NewRemoteCalcer(client)
-}
-
-func check(t *test.T, i interface{}, ok bool) {
-	if !ok {
-		t.Fatalf("Error in ", i)
-	}
-}
-
 func TestRemotizedCalc(t *test.T) {
-	serveraddr := startCalcerServer(t)
+	serveraddr, e := startCalcerServer()
+	dieOnError(t, e)
 	calc := new(Calc)
-	rcalc := getRemoteCalcerRef(t, serveraddr)
+	rcalc, e := getRemoteCalcerRef(serveraddr)
+	dieOnError(t, e)
 	for _, ct := range calcTests {
 		switch ct.op {
 		case Add:
@@ -111,28 +91,12 @@ var ustorerTests = []struct {
 	{"ap", "www.apple.com"},
 }
 
-func startStorerServer(t *test.T, us URLStorer) string {
-	// You can also search the service by passing the impleemntation to remotize...
-	r := remotize.NewService(us)
-	rpc.Register(r)
-	rpc.HandleHTTP()
-	addr := ":12345"
-	l, e := net.Listen("tcp", addr)
-	dieOnError(t, e)
-	go http.Serve(l, nil)
-	return "localhost" + addr
-}
-
-func getRemoteStorerRef(t *test.T, saddr string) URLStorer {
-	client, e := rpc.DialHTTP("tcp", saddr)
-	dieOnError(t, e)
-	return remotize.NewRemote(client, new(URLStorer)).(URLStorer)
-}
-
 func TestRemotizedURLStorer(t *test.T) {
-	serveraddr := startStorerServer(t, NewURLStore())
+	serveraddr, e := startStorerServer(NewURLStore())
+	dieOnError(t, e)
 	us := NewURLStore()
-	rus := getRemoteStorerRef(t, serveraddr)
+	rus, e := getRemoteStorerRef(serveraddr)
+	dieOnError(t, e)
 	for _, tu := range ustorerTests {
 		us.Set(tu.shorturl, tu.url)
 		rus.Set(tu.shorturl, tu.url)

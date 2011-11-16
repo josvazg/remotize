@@ -75,12 +75,11 @@ func startStorerServer(us URLStorer) (string, os.Error) {
 
 // getRemoteStorerRef Gets a local reference to a remote URLStorer Service
 func getRemoteStorerRef(saddr string) (URLStorer, os.Error) {
-	if client, e := rpc.DialHTTP("tcp", saddr); e != nil {
+	client, e := rpc.DialHTTP("tcp", saddr)
+	if e != nil {
 		return nil, e
-	} else {	
-		return remotize.NewRemote(client, new(URLStorer)).(URLStorer), nil
 	}
-	return nil,nil
+	return remotize.NewRemote(client, new(URLStorer)).(URLStorer), nil
 }
 
 //
@@ -164,12 +163,11 @@ func startCalcerServer() (string, os.Error) {
 
 // getRemoteCalcerRef returns a local reference to a remote Calcer RPC service
 func getRemoteCalcerRef(saddr string) (Calcer, os.Error) {
-	if client, e := rpc.DialHTTP("tcp", saddr); e != nil {
+	client, e := rpc.DialHTTP("tcp", saddr)
+	if e != nil {
 		return nil, e
-	} else {
-		return NewRemoteCalcer(client), nil
 	}
-//	return nil,nil
+	return NewRemoteCalcer(client), nil
 }
 
 //
@@ -199,3 +197,4 @@ func (fs *FileStore) Create(name string) (string, os.Error) {
 	go http.Serve(l, nil)
 	return addr, nil
 }
+

@@ -169,7 +169,7 @@ func getRemoteCalcerRef(saddr string) (Calcer, os.Error) {
 	} else {
 		return NewRemoteCalcer(client), nil
 	}
-	return nil,nil
+//	return nil,nil
 }
 
 //

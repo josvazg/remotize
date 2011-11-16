@@ -180,8 +180,8 @@ type FileStore struct {
 
 }
 
-// Create will create a local file and give an address to reach the proper Filer RPC service 
-func (fs *FileStore) Create(name string) (string, os.Error) {
+// Create will create a local file and give a Remote Reference to reach the proper Filer RPC service 
+func (fs *FileStore) Create(name string) (remotize.Ref, os.Error) {
 	f, e := os.Create(name)
 	if e != nil {
 		return "", e
@@ -193,8 +193,7 @@ func (fs *FileStore) Create(name string) (string, os.Error) {
 	if e != nil {
 		return "", e
 	}
-	addr := l.Addr().String()
 	go http.Serve(l, nil)
-	return addr, nil
+	return remotize.NewRef(f,l.Addr()), nil
 }
 

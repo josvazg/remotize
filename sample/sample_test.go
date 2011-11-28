@@ -1,7 +1,9 @@
 package sample
 
 import (
+	"fmt"
 	"os"
+	"net"
 	test "testing"
 )
 
@@ -101,5 +103,15 @@ func TestRemotizedURLStorer(t *test.T) {
 		us.Set(tu.shorturl, tu.url)
 		rus.Set(tu.shorturl, tu.url)
 		check(t, tu, us.Get(tu.shorturl) == rus.Get(tu.shorturl))
+	}
+}
+
+func TestNet(t *test.T) {
+	i, e := net.Interfaces()
+	fmt.Println("i=", i, "e=", e)
+	for _, ifc := range i {
+		fmt.Println("ifc haddr=",ifc.HardwareAddr)
+		addrs, e := ifc.Addrs()
+		fmt.Println("ifc addrs=",addrs," e=",e)
 	}
 }

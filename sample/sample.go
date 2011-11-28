@@ -2,6 +2,7 @@ package sample
 
 import (
 	"github.com/josvazg/remotize"
+	"sample/dep"
 	"http"
 	"io"
 	"math"
@@ -17,9 +18,9 @@ func init() {
 	// This marks URLStore as remotizable
 	remotize.Please(new(URLStore))
 	// This marks a type (os.File) defined on a another package (os)
-	remotize.Please(new(os.File))
+	remotize.Please(new(dep.FileService))
 	// This marks an interface (io.ReadWritCloser) defined on another package (io)
-	remotize.Please(new(io.ReadWriteCloser))
+	remotize.Please(new(dep.ProcessServicer))
 }
 
 //
@@ -176,24 +177,4 @@ func getRemoteCalcerRef(saddr string) (Calcer, os.Error) {
 //
 //
 
-type FileStore struct {
-
-}
-
-// Create will create a local file and give a Remote Reference to reach the proper Filer RPC service 
-func (fs *FileStore) Create(name string) (remotize.Ref, os.Error) {
-	f, e := os.Create(name)
-	if e != nil {
-		return "", e
-	}
-	r := NewFilerService(f)
-	rpc.Register(r)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":0")
-	if e != nil {
-		return "", e
-	}
-	go http.Serve(l, nil)
-	return remotize.NewRef(f,l.Addr()), nil
-}
 

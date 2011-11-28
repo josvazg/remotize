@@ -25,7 +25,10 @@ goremote/_obj:  tool/_obj goremote/goremote.go
 	#cd goremote && gotest
 	gomake -C goremote install
 
-sample/_obj: goremote/_obj sample/sample.go sample/sample_test.go
+sample/dep/_obj: sample/dep/dep.go
+	gomake -C sample/dep
+
+sample/_obj: goremote/_obj sample/dep/_obj sample/sample.go sample/sample_test.go
 	gomake -C sample test
 
 

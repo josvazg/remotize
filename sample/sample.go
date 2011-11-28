@@ -4,7 +4,6 @@ import (
 	"github.com/josvazg/remotize"
 	"sample/dep"
 	"http"
-	"io"
 	"math"
 	"net"
 	"os"
@@ -17,9 +16,9 @@ import (
 func init() {
 	// This marks URLStore as remotizable
 	remotize.Please(new(URLStore))
-	// This marks a type (os.File) defined on a another package (os)
+	// This marks a type (dep.FileService) defined on a another package (dep)
 	remotize.Please(new(dep.FileService))
-	// This marks an interface (io.ReadWritCloser) defined on another package (io)
+	// This marks an interface (dep.ProcessServicer) defined on another package
 	remotize.Please(new(dep.ProcessServicer))
 }
 
@@ -176,5 +175,59 @@ func getRemoteCalcerRef(saddr string) (Calcer, os.Error) {
 //     FILER SAMPLE SECTION: Remotization of a TYPE from OTHER package (from reflection type)
 //
 //
+
+// startFilerServer starts a RPC File server using dep.FileService as the implementation
+func startFilerServer() (string, os.Error) {
+	// You can access the remotized code directly, it should be created by now...
+	r := NewFileServicerService(new(dep.FileService))
+	rpc.Register(r)
+	rpc.HandleHTTP()
+	addr := ":1234"
+	l, e := net.Listen("tcp", addr)
+	if e != nil {
+		return "", e
+	}
+	go http.Serve(l, nil)
+	return "localhost" + addr, nil
+}
+
+// getRemoteFileServicerRef returns a local reference to a remote dep.FileService RPC service
+func getRemoteFileServicerRef(saddr string) (FileServicer, os.Error) {
+	client, e := rpc.DialHTTP("tcp", saddr)
+	if e != nil {
+		return nil, e
+	}
+	return NewRemoteFileServicer(client), nil
+}
+
+//
+//
+//     PROCESS SERVICER SECTION: Remotization of an INTERFACE from OTHER package
+//
+//
+
+// startProcessServer starts a RPC Process server using dep.ProcessService as the implementation
+func startProcessServer() (string, os.Error) {
+	// You can access the remotized code directly, it should be created by now...
+	r := NewProcessServicerService(new(dep.ProcessService))
+	rpc.Register(r)
+	rpc.HandleHTTP()
+	addr := ":1234"
+	l, e := net.Listen("tcp", addr)
+	if e != nil {
+		return "", e
+	}
+	go http.Serve(l, nil)
+	return "localhost" + addr, nil
+}
+
+// getRemoteProcessServicerRef returns a local reference to a remote dep.ProcessService RPC service
+func getRemoteProcessServicerRef(saddr string) (dep.ProcessServicer, os.Error) {
+	client, e := rpc.DialHTTP("tcp", saddr)
+	if e != nil {
+		return nil, e
+	}
+	return NewRemoteProcessServicer(client), nil
+}
 
 

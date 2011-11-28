@@ -10,6 +10,7 @@ clean: cleandeps
 cleandeps:
 	gomake -C tool clean
 	gomake -C goremote clean
+	gomake -C sample/dep clean
 	gomake -C sample clean
 
 all: $(GOROOT)/src/Make.rpkg _obj test sample/_obj
@@ -26,7 +27,7 @@ goremote/_obj:  tool/_obj goremote/goremote.go
 	gomake -C goremote install
 
 sample/dep/_obj: sample/dep/dep.go
-	gomake -C sample/dep
+	gomake -C sample/dep install
 
 sample/_obj: goremote/_obj sample/dep/_obj sample/sample.go sample/sample_test.go
 	gomake -C sample test

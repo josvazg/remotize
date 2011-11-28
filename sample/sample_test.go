@@ -1,9 +1,8 @@
 package sample
 
 import (
-	"fmt"
+	"sample/dep"
 	"os"
-	"net"
 	test "testing"
 )
 
@@ -106,12 +105,75 @@ func TestRemotizedURLStorer(t *test.T) {
 	}
 }
 
-func TestNet(t *test.T) {
-	i, e := net.Interfaces()
-	fmt.Println("i=", i, "e=", e)
-	for _, ifc := range i {
-		fmt.Println("ifc haddr=",ifc.HardwareAddr)
-		addrs, e := ifc.Addrs()
-		fmt.Println("ifc addrs=",addrs," e=",e)
+const (
+	Create = iota
+	Mkdir
+	Remove
+	FileInfo
+	Rename
+	ReadAt
+	WriteAt
+	Readdir
+)
+
+var rfileTests = []struct {
+	op            OpType
+	file, newname string
+	b             []byte
+	off           int64
+	n             int
+}{
+	{Mkdir, "somedir/subdir", "", nil, 0, 0},
+	{Create, "nonexistingdir/somefile", "", nil, 0, 0},
+	{Create, "somedir/somefile", "", nil, 0, 0},
+	{FileInfo, "somedir/somefile", "", nil, 0, 0},
+	{Rename, "somedir/somefile", "somedir/subdir/somefile.txt", nil, 0, 0},
+	{WriteAt, "somedir/subdir/somefile.txt", "", []byte("Hello!"), 10, 0},
+	{ReadAt, "somedir/subdir/somefile.txt", "", make([]byte, 10), 8, 0},
+	{Readdir, "somedir/subdir", "", nil, 0, 10},
+	{Remove, "somedir", "", nil, 0, 0},
+}
+
+func TestRemotizedFiler(t *test.T) {
+	lprefix := "local/"
+	rprefix := "remote/"
+	serveraddr, e := startFilerServer()
+	dieOnError(t, e)
+	fs := new(dep.FileService)
+	rfs, e := getRemoteFileServicerRef(serveraddr)
+	dieOnError(t, e)
+	for _, ft := range rfileTests {
+		switch ft.op {
+		case Create:
+			check(t, ft, fs.Create(lprefix+ft.file) == rfs.Create(rprefix+ft.file))
+		case Mkdir:
+			check(t, ft, fs.Mkdir(lprefix+ft.file) == rfs.Mkdir(rprefix+ft.file))
+		case Remove:
+			check(t, ft, fs.Remove(lprefix+ft.file) == rfs.Remove(rprefix+ft.file))
+		case FileInfo:
+			lfi, le := fs.FileInfo(lprefix + ft.file)
+			rfi, re := rfs.FileInfo(rprefix + ft.file)
+			check(t, ft, le == re)
+			check(t, ft, lfi.Size == rfi.Size)
+			check(t, ft, lfi.Mode == rfi.Mode)
+		case Rename:
+			check(t, ft, fs.Rename(lprefix+ft.file,
+				lprefix+ft.newname) == rfs.Rename(rprefix+ft.file, rprefix+ft.newname))
+		case ReadAt:
+			lr, le := fs.ReadAt(lprefix+ft.file, ft.b, ft.off)
+			rr, re := rfs.ReadAt(rprefix+ft.file, ft.b, ft.off)
+			check(t, ft, le == re)
+			check(t, ft, lr == rr)
+		case WriteAt:
+			lr, le := fs.WriteAt(lprefix+ft.file, ft.b, ft.off)
+			rr, re := rfs.WriteAt(rprefix+ft.file, ft.b, ft.off)
+			check(t, ft, le == re)
+			check(t, ft, lr == rr)
+		case Readdir:
+			lfi, le := fs.Readdir(lprefix+ft.file, ft.n)
+			rfi, re := rfs.Readdir(rprefix+ft.file, ft.n)
+			check(t, ft, le == re)
+			check(t, ft, lfi!=nil && rfi !=nil && len(lfi) == len(rfi))
+		}
 	}
 }

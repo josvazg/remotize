@@ -56,7 +56,7 @@ func (fs *FileService) WriteAt(filename string, b []byte, off int64) (int, os.Er
 }
 
 // ReadDir will list the directory contents
-func (fs *FileService) ReadDir(filename string, n int) ([]os.FileInfo, os.Error) {
+func (fs *FileService) Readdir(filename string, n int) ([]os.FileInfo, os.Error) {
 	f, e := os.Open(filename)
 	if e != nil {
 		return nil, e
@@ -84,7 +84,7 @@ type ProcessService struct {
 }
 
 // NewProcess generates a new process running a certain command and returns its id or an Error
-func NewProcess(cmd string) (int, os.Error) {
+func (ps *ProcessService) NewProcess(cmd string) (int, os.Error) {
 	argv := strings.Split(cmd, " ")
 	name := argv[0]
 	p, e := os.StartProcess(name, argv, &os.ProcAttr{"", nil, nil, nil})
@@ -95,7 +95,7 @@ func NewProcess(cmd string) (int, os.Error) {
 }
 
 // Kill will end the process identified by id
-func Kill(pid int) os.Error {
+func (ps *ProcessService) Kill(pid int) os.Error {
 	p, e := os.FindProcess(pid)
 	if e != nil {
 		return e
@@ -104,7 +104,7 @@ func Kill(pid int) os.Error {
 }
 
 // Signal will send a given signal to a process identified by id
-func Signal(pid int, sig os.Signal) os.Error {
+func (ps *ProcessService) Signal(pid int, sig os.Signal) os.Error {
 	p, e := os.FindProcess(pid)
 	if e != nil {
 		return e
@@ -113,7 +113,7 @@ func Signal(pid int, sig os.Signal) os.Error {
 }
 
 // Wait will wait a Process
-func Wait(pid int, options int) (*os.Waitmsg, os.Error) {
+func (ps *ProcessService) Wait(pid int, options int) (*os.Waitmsg, os.Error) {
 	p, e := os.FindProcess(pid)
 	if e != nil {
 		return nil, e

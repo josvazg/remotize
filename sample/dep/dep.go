@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// Wraps an error to make gob-able
+func wrapError(e os.Error) os.Error {
+	return os.NewError(e.String())
+}
+
 // Stateless version of a (local) File Service
 type FileService struct {
 
@@ -18,7 +23,7 @@ func (fs *FileService) Create(filename string) os.Error {
 
 // Mkdir creates a new directory (and all subdirectories in between)
 func (fs *FileService) Mkdir(filename string) os.Error {
-	return os.MkdirAll(filename, 0)
+	return wrapError(os.MkdirAll(filename, 0))
 }
 
 // Remove will delete a file by a given name

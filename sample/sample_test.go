@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"sample/dep"
 	"os"
 	test "testing"
@@ -143,6 +144,7 @@ func TestRemotizedFiler(t *test.T) {
 	rfs, e := getRemoteFileServicerRef(serveraddr)
 	dieOnError(t, e)
 	for _, ft := range rfileTests {
+		fmt.Println("ft",ft)
 		switch ft.op {
 		case Create:
 			check(t, ft, fs.Create(lprefix+ft.file) == rfs.Create(rprefix+ft.file))

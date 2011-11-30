@@ -173,7 +173,8 @@ func TestRemotizedFiler(t *test.T) {
 			lfi, le := fs.Readdir(lprefix+ft.file, ft.n)
 			rfi, re := rfs.Readdir(rprefix+ft.file, ft.n)
 			check(t, ft, le == re)
-			check(t, ft, lfi!=nil && rfi !=nil && len(lfi) == len(rfi))
+			check(t, ft, lfi != nil && rfi != nil && len(lfi) == len(rfi))
 		}
 	}
 }
+

@@ -182,7 +182,7 @@ func startFilerServer() (string, os.Error) {
 	r := NewFileServicerService(new(dep.FileService))
 	rpc.Register(r)
 	rpc.HandleHTTP()
-	addr := ":1234"
+	addr := ":23456"
 	l, e := net.Listen("tcp", addr)
 	if e != nil {
 		return "", e
@@ -212,7 +212,7 @@ func startProcessServer() (string, os.Error) {
 	r := NewProcessServicerService(new(dep.ProcessService))
 	rpc.Register(r)
 	rpc.HandleHTTP()
-	addr := ":1234"
+	addr := ":34567"
 	l, e := net.Listen("tcp", addr)
 	if e != nil {
 		return "", e

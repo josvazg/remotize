@@ -135,6 +135,10 @@ var rfileTests = []struct {
 	{Remove, "somedir", "", nil, 0, 0},
 }
 
+func errOrNil(a interface{}, b interface{}) bool {
+	return (a == nil && a == b) || (a != nil && b != nil)
+}
+
 func TestRemotizedFiler(t *test.T) {
 	lprefix := "local/"
 	rprefix := "remote/"
@@ -144,39 +148,55 @@ func TestRemotizedFiler(t *test.T) {
 	rfs, e := getRemoteFileServicerRef(serveraddr)
 	dieOnError(t, e)
 	for _, ft := range rfileTests {
-		fmt.Println("ft",ft)
 		switch ft.op {
 		case Create:
-			check(t, ft, fs.Create(lprefix+ft.file) == rfs.Create(rprefix+ft.file))
+			fmt.Println("Create ", ft.file)
+			check(t, ft, errOrNil(fs.Create(lprefix+ft.file), rfs.Create(rprefix+ft.file)))
 		case Mkdir:
-			check(t, ft, fs.Mkdir(lprefix+ft.file) == rfs.Mkdir(rprefix+ft.file))
+			fmt.Println("Mkdir ", ft.file)
+			check(t, ft, errOrNil(fs.Mkdir(lprefix+ft.file), rfs.Mkdir(rprefix+ft.file)))
 		case Remove:
-			check(t, ft, fs.Remove(lprefix+ft.file) == rfs.Remove(rprefix+ft.file))
+			fmt.Println("Remove ", ft.file)
+			check(t, ft, errOrNil(fs.Remove(lprefix+ft.file), rfs.Remove(rprefix+ft.file)))
 		case FileInfo:
+			fmt.Println("FileInfo ", ft.file)
 			lfi, le := fs.FileInfo(lprefix + ft.file)
 			rfi, re := rfs.FileInfo(rprefix + ft.file)
-			check(t, ft, le == re)
+			check(t, ft, errOrNil(le, re))
+			check(t, ft, errOrNil(lfi, lfi))
+			if lfi==nil {
+				continue
+			}
 			check(t, ft, lfi.Size == rfi.Size)
 			check(t, ft, lfi.Mode == rfi.Mode)
 		case Rename:
-			check(t, ft, fs.Rename(lprefix+ft.file,
-				lprefix+ft.newname) == rfs.Rename(rprefix+ft.file, rprefix+ft.newname))
+			fmt.Println("Rename ", ft.file, " -> ", ft.newname)
+			lr := fs.Rename(lprefix+ft.file, lprefix+ft.newname)
+			rr := rfs.Rename(rprefix+ft.file, rprefix+ft.newname)
+			check(t, ft, errOrNil(lr, rr))
 		case ReadAt:
+			fmt.Println("ReadAt", ft.file, "pos", ft.off)
 			lr, le := fs.ReadAt(lprefix+ft.file, ft.b, ft.off)
 			rr, re := rfs.ReadAt(rprefix+ft.file, ft.b, ft.off)
-			check(t, ft, le == re)
+			check(t, ft, errOrNil(le, re))
+			check(t, ft, errOrNil(lr, rr))
 			check(t, ft, lr == rr)
 		case WriteAt:
+			fmt.Println("WriteAt",ft.file,"pos",ft.off)
 			lr, le := fs.WriteAt(lprefix+ft.file, ft.b, ft.off)
 			rr, re := rfs.WriteAt(rprefix+ft.file, ft.b, ft.off)
-			check(t, ft, le == re)
+			check(t, ft, errOrNil(le, re))
+			check(t, ft, errOrNil(lr, rr))
 			check(t, ft, lr == rr)
 		case Readdir:
+			fmt.Println("Readdir",ft.file,"pos",ft.off)
 			lfi, le := fs.Readdir(lprefix+ft.file, ft.n)
 			rfi, re := rfs.Readdir(rprefix+ft.file, ft.n)
-			check(t, ft, le == re)
+			check(t, ft, errOrNil(le, re))
+			check(t, ft, errOrNil(lfi, rfi))
 			check(t, ft, lfi != nil && rfi != nil && len(lfi) == len(rfi))
 		}
+		os.RemoveAll(lprefix)
+		os.RemoveAll(rprefix)
 	}
 }
-

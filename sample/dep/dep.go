@@ -1,13 +1,32 @@
 package dep
 
 import (
+	"gob"
 	"os"
 	"strings"
 )
 
-// Wraps an error to make gob-able
+func init() {
+	// Allow remotization (gob-ability) of my own error...
+	gob.Register(new(myError))
+}
+
+// my error type
+type myError struct {
+	Err string
+}
+
+// Meets the Error interface
+func (e *myError) String() string {
+	return e.Err
+}
+
+// wrapError will wrap an os.Error to be myError and thus, be gob-able = sendable
 func wrapError(e os.Error) os.Error {
-	return os.NewError(e.String())
+	if e==nil {
+		return nil
+	}
+	return &myError{e.String()}
 }
 
 // Stateless version of a (local) File Service
@@ -18,27 +37,28 @@ type FileService struct {
 // Create returns a new File created by a given name
 func (fs *FileService) Create(filename string) os.Error {
 	_, e := os.Create(filename)
-	return e
+	return wrapError(e)
 }
 
 // Mkdir creates a new directory (and all subdirectories in between)
 func (fs *FileService) Mkdir(filename string) os.Error {
-	return wrapError(os.MkdirAll(filename, 0))
+	return wrapError(os.MkdirAll(filename, 0755))
 }
 
 // Remove will delete a file by a given name
 func (fs *FileService) Remove(filename string) os.Error {
-	return os.Remove(filename)
+	return wrapError(os.Remove(filename))
 }
 
 // FileInfo returns the fileinfo for a give file name
-func (fs *FileService) FileInfo(filename string) (fi *os.FileInfo, err os.Error) {
-	return os.Lstat(filename)
+func (fs *FileService) FileInfo(filename string) (*os.FileInfo, os.Error) {
+	fi, e := os.Lstat(filename)
+	return fi, wrapError(e)
 }
 
 // Rename will rename a directory or file
 func (fs *FileService) Rename(oldname, newname string) os.Error {
-	return os.Rename(oldname, newname)
+	return wrapError(os.Rename(oldname, newname))
 }
 
 // ReadAt will read a filename at a given offset into a given byte array
@@ -47,7 +67,8 @@ func (fs *FileService) ReadAt(filename string, b []byte, off int64) (int, os.Err
 	if e != nil {
 		return 0, e
 	}
-	return f.ReadAt(b, off)
+	n, e := f.ReadAt(b, off)
+	return n, wrapError(e)
 }
 
 // WriteAt will write the given bytes at a certain offset on filename
@@ -57,7 +78,8 @@ func (fs *FileService) WriteAt(filename string, b []byte, off int64) (int, os.Er
 		return 0, e
 	}
 	defer gosync(f)
-	return f.WriteAt(b, off)
+	n, e := f.WriteAt(b, off)
+	return n, wrapError(e)
 }
 
 // ReadDir will list the directory contents
@@ -66,7 +88,8 @@ func (fs *FileService) Readdir(filename string, n int) ([]os.FileInfo, os.Error)
 	if e != nil {
 		return nil, e
 	}
-	return f.Readdir(n)
+	fis, e := f.Readdir(n)
+	return fis, wrapError(e)
 }
 
 func gosync(f *os.File) {
@@ -125,3 +148,4 @@ func (ps *ProcessService) Wait(pid int, options int) (*os.Waitmsg, os.Error) {
 	}
 	return p.Wait(options)
 }
+

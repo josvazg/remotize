@@ -23,7 +23,7 @@ func (e *myError) String() string {
 
 // wrapError will wrap an os.Error to be myError and thus, be gob-able = sendable
 func wrapError(e os.Error) os.Error {
-	if e==nil {
+	if e == nil {
 		return nil
 	}
 	return &myError{e.String()}
@@ -65,7 +65,7 @@ func (fs *FileService) Rename(oldname, newname string) os.Error {
 func (fs *FileService) ReadAt(filename string, b []byte, off int64) (int, os.Error) {
 	f, e := os.Open(filename)
 	if e != nil {
-		return 0, e
+		return 0, wrapError(e)
 	}
 	n, e := f.ReadAt(b, off)
 	return n, wrapError(e)
@@ -75,7 +75,7 @@ func (fs *FileService) ReadAt(filename string, b []byte, off int64) (int, os.Err
 func (fs *FileService) WriteAt(filename string, b []byte, off int64) (int, os.Error) {
 	f, e := os.Open(filename)
 	if e != nil {
-		return 0, e
+		return 0, wrapError(e)
 	}
 	defer gosync(f)
 	n, e := f.WriteAt(b, off)
@@ -86,7 +86,7 @@ func (fs *FileService) WriteAt(filename string, b []byte, off int64) (int, os.Er
 func (fs *FileService) Readdir(filename string, n int) ([]os.FileInfo, os.Error) {
 	f, e := os.Open(filename)
 	if e != nil {
-		return nil, e
+		return nil, wrapError(e)
 	}
 	fis, e := f.Readdir(n)
 	return fis, wrapError(e)
@@ -117,7 +117,7 @@ func (ps *ProcessService) NewProcess(cmd string) (int, os.Error) {
 	name := argv[0]
 	p, e := os.StartProcess(name, argv, &os.ProcAttr{"", nil, nil, nil})
 	if e != nil {
-		return -1, e
+		return -1, wrapError(e)
 	}
 	return p.Pid, nil
 }
@@ -126,25 +126,25 @@ func (ps *ProcessService) NewProcess(cmd string) (int, os.Error) {
 func (ps *ProcessService) Kill(pid int) os.Error {
 	p, e := os.FindProcess(pid)
 	if e != nil {
-		return e
+		return wrapError(e)
 	}
-	return p.Kill()
+	return wrapError(p.Kill())
 }
 
 // Signal will send a given signal to a process identified by id
 func (ps *ProcessService) Signal(pid int, sig os.Signal) os.Error {
 	p, e := os.FindProcess(pid)
 	if e != nil {
-		return e
+		return wrapError(e)
 	}
-	return p.Signal(sig)
+	return wrapError(p.Signal(sig))
 }
 
 // Wait will wait a Process
 func (ps *ProcessService) Wait(pid int, options int) (*os.Waitmsg, os.Error) {
 	p, e := os.FindProcess(pid)
 	if e != nil {
-		return nil, e
+		return nil, wrapError(e)
 	}
 	return p.Wait(options)
 }

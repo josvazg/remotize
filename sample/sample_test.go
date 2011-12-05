@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"sample/dep"
 	"os"
 	test "testing"
@@ -150,53 +149,46 @@ func TestRemotizedFiler(t *test.T) {
 	for _, ft := range rfileTests {
 		switch ft.op {
 		case Create:
-			fmt.Println("Create ", ft.file)
 			check(t, ft, errOrNil(fs.Create(lprefix+ft.file), rfs.Create(rprefix+ft.file)))
 		case Mkdir:
-			fmt.Println("Mkdir ", ft.file)
 			check(t, ft, errOrNil(fs.Mkdir(lprefix+ft.file), rfs.Mkdir(rprefix+ft.file)))
 		case Remove:
-			fmt.Println("Remove ", ft.file)
 			check(t, ft, errOrNil(fs.Remove(lprefix+ft.file), rfs.Remove(rprefix+ft.file)))
 		case FileInfo:
-			fmt.Println("FileInfo ", ft.file)
 			lfi, le := fs.FileInfo(lprefix + ft.file)
 			rfi, re := rfs.FileInfo(rprefix + ft.file)
 			check(t, ft, errOrNil(le, re))
 			check(t, ft, errOrNil(lfi, lfi))
-			if lfi==nil {
+			if lfi == nil {
 				continue
 			}
 			check(t, ft, lfi.Size == rfi.Size)
 			check(t, ft, lfi.Mode == rfi.Mode)
 		case Rename:
-			fmt.Println("Rename ", ft.file, " -> ", ft.newname)
 			lr := fs.Rename(lprefix+ft.file, lprefix+ft.newname)
 			rr := rfs.Rename(rprefix+ft.file, rprefix+ft.newname)
 			check(t, ft, errOrNil(lr, rr))
 		case ReadAt:
-			fmt.Println("ReadAt", ft.file, "pos", ft.off)
 			lr, le := fs.ReadAt(lprefix+ft.file, ft.b, ft.off)
 			rr, re := rfs.ReadAt(rprefix+ft.file, ft.b, ft.off)
 			check(t, ft, errOrNil(le, re))
 			check(t, ft, errOrNil(lr, rr))
 			check(t, ft, lr == rr)
 		case WriteAt:
-			fmt.Println("WriteAt",ft.file,"pos",ft.off)
 			lr, le := fs.WriteAt(lprefix+ft.file, ft.b, ft.off)
 			rr, re := rfs.WriteAt(rprefix+ft.file, ft.b, ft.off)
 			check(t, ft, errOrNil(le, re))
 			check(t, ft, errOrNil(lr, rr))
 			check(t, ft, lr == rr)
 		case Readdir:
-			fmt.Println("Readdir",ft.file,"pos",ft.off)
 			lfi, le := fs.Readdir(lprefix+ft.file, ft.n)
 			rfi, re := rfs.Readdir(rprefix+ft.file, ft.n)
 			check(t, ft, errOrNil(le, re))
 			check(t, ft, errOrNil(lfi, rfi))
 			check(t, ft, lfi != nil && rfi != nil && len(lfi) == len(rfi))
 		}
-		os.RemoveAll(lprefix)
-		os.RemoveAll(rprefix)
 	}
+	os.RemoveAll(lprefix)
+	os.RemoveAll(rprefix)
 }
+

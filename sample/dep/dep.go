@@ -101,9 +101,8 @@ func gosync(f *os.File) {
 // Stateless version of a Process Servicer interface (local or remote)
 type ProcessServicer interface {
 	NewProcess(cmd string) (int, os.Error)
-	Kill(id int) os.Error
-	Signal(id int, sig os.Signal) os.Error
-	Wait(id int, options int) (*os.Waitmsg, os.Error)
+	Kill(pid int) os.Error
+	Wait(pid int, options int) (*os.Waitmsg, os.Error)
 }
 
 // Local Process Service
@@ -131,21 +130,13 @@ func (ps *ProcessService) Kill(pid int) os.Error {
 	return wrapError(p.Kill())
 }
 
-// Signal will send a given signal to a process identified by id
-func (ps *ProcessService) Signal(pid int, sig os.Signal) os.Error {
-	p, e := os.FindProcess(pid)
-	if e != nil {
-		return wrapError(e)
-	}
-	return wrapError(p.Signal(sig))
-}
-
 // Wait will wait a Process
 func (ps *ProcessService) Wait(pid int, options int) (*os.Waitmsg, os.Error) {
 	p, e := os.FindProcess(pid)
 	if e != nil {
 		return nil, wrapError(e)
 	}
-	return p.Wait(options)
+	r, e := p.Wait(options)
+	return r, wrapError(e)
 }
 

@@ -116,7 +116,7 @@ const (
 	Readdir
 )
 
-var rfileTests = []struct {
+var fileTests = []struct {
 	op            OpType
 	file, newname string
 	b             []byte
@@ -146,7 +146,7 @@ func TestRemotizedFiler(t *test.T) {
 	fs := new(dep.FileService)
 	rfs, e := getRemoteFileServicerRef(serveraddr)
 	dieOnError(t, e)
-	for _, ft := range rfileTests {
+	for _, ft := range fileTests {
 		switch ft.op {
 		case Create:
 			check(t, ft, errOrNil(fs.Create(lprefix+ft.file), rfs.Create(rprefix+ft.file)))
@@ -190,5 +190,56 @@ func TestRemotizedFiler(t *test.T) {
 	}
 	os.RemoveAll(lprefix)
 	os.RemoveAll(rprefix)
+}
+
+const (
+	NewProcess = iota
+	Kill
+	Wait
+)
+
+var procTests = []struct {
+	op   OpType
+	cmd  string
+	opts int
+}{
+	{NewProcess, "/bin/ls -lR /", 0},
+	{Kill, "", 0},
+	{NewProcess, "/bin/ls -lhgR /", 0},
+	{Kill, "", 0},
+	{Wait, "", 0},
+	{NewProcess, "/bin/ls -lhgR", 0},
+	{Wait, "", 0},
+}
+
+func TestRemotizedProcesser(t *test.T) {
+	serveraddr, e := startProcessServer()
+	dieOnError(t, e)
+	ps := new(dep.ProcessService)
+	rps, e := getRemoteProcessServicerRef(serveraddr)
+	dieOnError(t, e)
+	lastPid := -1
+	lastRPid := -1
+	for _, pt := range procTests {
+		switch pt.op {
+		case NewProcess:
+			var le, re os.Error
+			lastPid, le = ps.NewProcess(pt.cmd)
+			lastRPid, re = rps.NewProcess(pt.cmd)
+			check(t, pt, le == nil && re == nil)
+			check(t, pt, errOrNil(le, re))
+		case Kill:
+			if lastPid != -1 && lastRPid != -1 {
+				check(t, pt, errOrNil(ps.Kill(lastPid), rps.Kill(lastRPid)))
+			}
+		case Wait:
+			if lastPid != -1 && lastRPid != -1 {
+				lwm, le := ps.Wait(lastPid, pt.opts)
+				rwm, re := rps.Wait(lastRPid, pt.opts)
+				check(t, pt, errOrNil(le, re))
+				check(t, pt, errOrNil(lwm, rwm))
+			}
+		}
+	}
 }
 

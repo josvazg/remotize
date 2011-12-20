@@ -1,8 +1,6 @@
 // Copyright 2011 Jose Luis Vázquez González josvazg@gmail.com
 // Use of this source code is governed by a BSD-style
 
-// remotize package wraps rpc calls so you don't have to rewrite an interface by
-// hand in order to use it remotely. 
 package tool
 
 import (
@@ -18,7 +16,7 @@ import (
 	"strings"
 )
 
-const RemotizePkg = "github.com/josvazg/remotize"
+const remotizePkg = "github.com/josvazg/remotize"
 
 // remotizer code head and tail & marker
 const (
@@ -44,19 +42,19 @@ type Spec struct {
 	imports     map[string]string
 }
 
-// NewSpec will create an Spec to be remotized
+// NewSpec will create an Spec to be remotized.
 func NewSpec(pack string, isInterface bool, i interface{}) *Spec {
 	t := reflect.TypeOf(i)
 	bt := baseType(t)
 	return &Spec{pack, bt.Name(), isInterface, bt, make(map[string]string)}
 }
 
-// Value2Spec Turns a sample value into a remotization Spec for that kind of value
+// Value2Spec turns a sample value into a remotization Spec for that kind of value.
 func Value2Spec(pack string, i interface{}) *Spec {
 	return Type2Spec(pack, reflect.TypeOf(i))
 }
 
-// Type2Spec Turns a type into a Spec to be remotized
+// Type2Spec turns a type into a Spec to be remotized.
 func Type2Spec(pack string, t reflect.Type) *Spec {
 	bt := baseType(t)
 	isInterface := (bt.Kind() == reflect.Interface)
@@ -67,7 +65,7 @@ func Type2Spec(pack string, t reflect.Type) *Spec {
 }
 
 // Remotize remotizes a type, interface or source code specified in a Spec by generating
-// the correct wrapper for that type
+// the correct wrapper for that type.
 func Remotize(spec *Spec) os.Error {
 	if spec.name == "" {
 		return os.NewError(fmt.Sprintf("Can't remotize unnamed interface from ", spec))
@@ -204,8 +202,8 @@ func (s *Spec) buildHeader() string {
 	if s.packname != typepack && typepack != "main" && s.t.Kind() == reflect.Interface {
 		s.imports[typepack] = typepack
 	}
-	if s.packname != RemotizePkg {
-		s.imports[RemotizePkg] = RemotizePkg
+	if s.packname != remotizePkg {
+		s.imports[remotizePkg] = remotizePkg
 	}
 	names := make([]string, 0)
 	for _, name := range s.imports {
@@ -417,19 +415,23 @@ func (s *Spec) printFuncResultList(w io.Writer, t reflect.Type) {
 }
 
 // generateRemotizerCode returns the remotizer source code for a given set of Detected remotizables
-func generateRemotizerCode(d *Detected) string {
+func generateRemotizerCode(pspecs []PreSpec) string {
 	src := bytes.NewBuffer(make([]byte, 0))
 	fmt.Fprintf(src, remotizerHead)
-	genImports(src, d)
-	genTypeDefs(src, d)
+	genImports(src, pspecs)
+	genTypeDefs(src, pspecs)
 	fmt.Fprintf(src, "var toremotize = []*tool.Spec{")
-	for name, dcl := range d.RDecls {
-		fmt.Fprintf(src, "\n\ttool.NewSpec(\"%v\",", d.packname)
-		fmt.Fprintf(src, "%v,", dcl.isInterface)
-		fmt.Fprintf(src, "new(%v)),", ifacename(name))
-	}
-	for _, s := range d.RTypes {
-		fmt.Fprintf(src, "\n\ttool.Value2Spec(\"%v\",new(%v)),", d.packname, s)
+	for _, ps := range pspecs {
+		// complete types with methods...
+		if dcl,ok:=ps.(*decl); ok {
+			fmt.Fprintf(src, "\n\ttool.NewSpec(\"%v\",", ps.packname())
+			fmt.Fprintf(src, "%v,", dcl.isInterface)
+			fmt.Fprintf(src, "new(%v)),", ifacename(ps.name()))
+		}
+		// ... or just a type name predefined elsewhere
+		if _,ok:=ps.(*predefined); ok { 
+			fmt.Fprintf(src, "\n\ttool.Value2Spec(\"%v\",new(%v)),", ps.packname(), ps.name())
+		}
 	}
 	fmt.Fprintf(src, "\n}\n\n")
 	fmt.Fprintf(src, remotizerTail)
@@ -437,22 +439,27 @@ func generateRemotizerCode(d *Detected) string {
 }
 
 // genImports adds imports to the remotizer source code from types
-func genImports(src io.Writer, d *Detected) {
+func genImports(src io.Writer, pspecs []PreSpec) {
 	imports := []string{"tool"}
-	d.aliases["tool"] = "github.com/josvazg/remotize/tool"
-	for _, typename := range d.RTypes {
-		packname := strings.SplitN(typename, ".", 2)[0]
-		imports = addImport(imports, packname)
-	}
-	for _, decl := range d.RDecls {
-		for packname, _ := range decl.imports {
+	aliases:=make(map[string]string)
+	aliases["tool"] = "github.com/josvazg/remotize/tool"
+	for _, pspec:=range pspecs {
+		if decl,ok:=pspec.(*decl); ok {
+			for alias,name:=range decl.detected.aliases {
+				aliases[alias]=name
+			}
+			for packname, _ := range decl.imports {
+				imports = addImport(imports, packname)
+			}
+		} else if _,ok:=pspec.(*predefined); ok {
+			packname := strings.SplitN(pspec.name(), ".", 2)[0]
 			imports = addImport(imports, packname)
 		}
 	}
-	writeImports(src, imports, d.aliases, "")
+	writeImports(src, imports, aliases, "")
 }
 
-// addImport will add a packname import into a list makking sure it's nor repeated
+// addImport will add a packname import into a list making sure it's nor repeated
 func addImport(imports []string, packname string) []string {
 	for _, imp := range imports {
 		if packname == imp {
@@ -463,9 +470,9 @@ func addImport(imports []string, packname string) []string {
 }
 
 // genTypeDefs adds types and interface source code definitions from this packages to the remotizer
-func genTypeDefs(src io.Writer, d *Detected) {
-	for _, decl := range d.RDecls {
-		if decl.Src != nil {
+func genTypeDefs(src io.Writer, pspecs []PreSpec) {
+	for _, pspec := range pspecs {
+		if decl,ok:=pspec.(*decl); ok && decl.Src != nil {
 			fmt.Fprintf(src, "\n%s\n", decl.Src)
 		}
 	}
@@ -489,23 +496,23 @@ func writeImports(w io.Writer, imports []string, aliases map[string]string, skip
 	fmt.Fprintf(w, ")\n\n")
 }
 
-// build generates a program to remotize the detected interfaces
-func buildRemotizer(d *Detected) os.Error {
-	src := generateRemotizerCode(d)
+// BuildRemotizer generates a program to remotize the detected interfaces.
+func BuildRemotizer(pspecs []PreSpec) os.Error {
+	src := generateRemotizerCode(pspecs)
 	filename := "_remotizer"
 	if e := gofmtSave(filename, src); e != nil {
 		return e
 	}
-	if o, e := RunCmd(Gocompile(), "-I", "_test", filename+".go"); e != nil {
+	if o, e := runCmd(gocompile(), "-I", "_test", filename+".go"); e != nil {
 		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
-	if o, e := RunCmd(Golink(), "-L", "_test", "-o", filename,
-		filename+"."+Goext()); e != nil {
+	if o, e := runCmd(golink(), "-L", "_test", "-o", filename,
+		filename+"."+goext()); e != nil {
 		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
-	if o, e := RunCmd("./" + filename); e != nil {
+	if o, e := runCmd("./" + filename); e != nil {
 		fmt.Fprintf(os.Stderr, string(o)+"\n")
 		return e
 	}
@@ -513,7 +520,7 @@ func buildRemotizer(d *Detected) os.Error {
 }
 
 // runs a command
-func RunCmd(cmdargs ...string) ([]byte, os.Error) {
+func runCmd(cmdargs ...string) ([]byte, os.Error) {
 	fmt.Println(cmdargs)
 	return exec.Command(cmdargs[0], cmdargs[1:]...).CombinedOutput()
 }
@@ -522,7 +529,7 @@ func RunCmd(cmdargs ...string) ([]byte, os.Error) {
 var dict map[string]string
 
 // go tool execution string
-func Goexec(tool string) string {
+func goexec(tool string) string {
 	if dict == nil {
 		dict = make(map[string]string)
 		dict["386"] = "8"
@@ -535,17 +542,17 @@ func Goexec(tool string) string {
 }
 
 // Go compiler
-func Gocompile() string {
-	return Goexec("compiler")
+func gocompile() string {
+	return goexec("compiler")
 }
 
 // Go linker
-func Golink() string {
-	return Goexec("linker")
+func golink() string {
+	return goexec("linker")
 }
 
 // Go architecture extension
-func Goext() string {
-	return Goexec("")
+func goext() string {
+	return goexec("")
 }
 

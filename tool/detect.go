@@ -73,30 +73,6 @@ type detected struct {
 	decls      []PreSpec
 }
 
-// Autoremotize will remotize all interfaces or types with methods that either:
-//  - Are defined with a comment including '(remotize)' at the end
-//  - Are used within certains calls like:
-//      remotize.Please(), 
-//      remotize.NewRemote() or remotize.NewService(),
-//      NewRemoteXXX() or NewXXXService()
-func Autoremotize(files ...string) (int, os.Error) {
-	done := 0
-	d, e := Detect(files...)
-	if e != nil {
-		return 0, e
-	}
-	if d == nil || len(d) == 0 {
-		fmt.Println("No 'remotizables' found")
-		return done, nil
-	}
-	fmt.Printf("Found %v interfaces/types to remotize\n", len(d))
-	e = BuildRemotizer(d)
-	if e != nil {
-		return 0, e
-	}
-	return done, nil
-}
-
 // Detect will process go source files to detect interfaces or types that:
 //  - Are defined with a comment including '(remotize)' at the end
 //  - Are used within certains calls like:

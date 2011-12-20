@@ -1,3 +1,4 @@
+// The dep package contains a sample remotizable type and interface "defined elsewhere".
 package dep
 
 import (
